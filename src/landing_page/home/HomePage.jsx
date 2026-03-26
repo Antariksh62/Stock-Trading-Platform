@@ -15,7 +15,7 @@ function HomePage() {
         <>
             <Navbar />
             <Hero />
-            <Awards />
+            {/* <Awards /> */}
             <Stats />
             <Pricing />
             <Education />
