@@ -10,12 +10,18 @@ import OpenAccount from '../OpenAccount';
 import Navbar from '../Navbar';
 import Footer from '../Footer';
 
+/*
+FONT SIZE : 
+main heading : 24
+heading : 20
+text : 16
+*/
+
 function HomePage() {
     return (
         <>
             <Navbar />
             <Hero />
-            {/* <Awards /> */}
             <Stats />
             <Pricing />
             <Education />

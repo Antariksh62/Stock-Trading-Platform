@@ -14,7 +14,7 @@ function Education() {
                     />
                 </div>
 
-                <div className="col-6">
+                <div className="col-6 mt-4">
                     <h4>Free and open market education</h4>
 
                     <p>Varsity, the largest online stock market education book in the world covering everything from the basics to advanced trading.</p>

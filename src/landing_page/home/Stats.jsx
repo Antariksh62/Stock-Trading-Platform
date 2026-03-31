@@ -33,7 +33,7 @@ function Stats() {
                     <img 
                         src="media\images\ecosystem.png" 
                         alt="" 
-                        className='img-fluid mb-5'
+                        className='img-fluid mb-4'
                         style={{width : "100%"}}
                     />
 

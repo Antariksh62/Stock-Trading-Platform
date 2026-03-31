@@ -1,0 +1,16 @@
+html, body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+/* src/index.css */
+
+
+
+h1{
+    font-size: 20px !important;
+}
+
+p{
+    font-size: 16px !important;
+}
