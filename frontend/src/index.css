@@ -1,0 +1,19 @@
+html, body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+.force-white {
+  background-color: white !important;
+}
+
+.nav-link{
+    margin-left: 50px;
+}
+
+.a{
+    text-decoration : none !important;
+}
+
+/* src/index.css */
+
