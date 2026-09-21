@@ -1,7 +1,13 @@
 html, body {
   overflow-x: hidden;
   max-width: 100%;
+  margin: 0;
+    padding: 0;
+    width: 100%;
+    overflow-x: hidden;
 }
+
+
 
 .force-white {
   background-color: white !important;
