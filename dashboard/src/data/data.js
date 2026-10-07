@@ -733,3 +733,4 @@ export const positions = [
     isLoss: true,
   },
 ];
+
