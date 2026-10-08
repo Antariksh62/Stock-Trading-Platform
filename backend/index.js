@@ -4,16 +4,28 @@ const express = require("express");
 const mongoose = require("mongoose");
 const bodyParser = require("body-parser");
 const cors = require("cors");
+const cookieParser = require("cookie-parser");
 
 const { HoldingsModel } = require('./model/HoldingsModel');
 const { PositionsModel } = require('./model/PositionsModel');
-const {OrdersModel} = require('./model/OrdersModel'); 
+const { OrdersModel } = require('./model/OrdersModel'); 
+const { UserModel } = require('./model/UserModel');
+const { Signup, Login, Logout } = require('./controllers/AuthController');
+const { userVerification } = require('./middlewares/AuthMiddleware');
 
-const PORT = process.env.PORT || 3002;
+const PORT = process.env.PORT || 3001;
 const uri = process.env.MONGO_URL;
 
 const app = express();
-app.use(cors());
+
+app.use(
+  cors({
+    origin: ["http://localhost:5173", "http://localhost:3000"],
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true,
+  })
+);
+app.use(cookieParser());
 app.use(bodyParser.json());
 
 
@@ -619,29 +631,57 @@ app.get('/addPositions', async (req, res) => {
 
 
 app.get('/allHoldings', async(req, res) => {
-  let allHoldings = await HoldingsModel.find({});
-  res.json(allHoldings);
+  try {
+    let allHoldings = await HoldingsModel.find({});
+    res.json(allHoldings);
+  } catch (error) {
+    console.error("Error fetching holdings:", error);
+    res.status(500).json({ error: "Failed to fetch holdings" });
+  }
 });
 
-
 app.get('/allPositions', async(req, res) => {
-  let allPositions = await HoldingsModel.find({});
-  res.json(allPositions);
+  try {
+    let allPositions = await PositionsModel.find({});
+    res.json(allPositions);
+  } catch (error) {
+    console.error("Error fetching positions:", error);
+    res.status(500).json({ error: "Failed to fetch positions" });
+  }
+});
+
+app.get('/allOrders', async(req, res) => {
+  try {
+    let allOrders = await OrdersModel.find({});
+    res.json(allOrders);
+  } catch (error) {
+    console.error("Error fetching orders:", error);
+    res.status(500).json({ error: "Failed to fetch orders" });
+  }
 });
 
 app.post("/newOrder", async (req, res) => {
-  let newOrder = new OrdersModel({
-    name: req.body.name,
-    qty: req.body.qty,
-    price: req.body.price,
-    mode: req.body.mode,
-  });
+  try {
+    let newOrder = new OrdersModel({
+      name: req.body.name,
+      qty: req.body.qty,
+      price: req.body.price,
+      mode: req.body.mode,
+    });
 
-  newOrder.save();
-
-  res.send("Order saved!");
+    await newOrder.save();
+    res.status(201).send("Order saved!");
+  } catch (error) {
+    console.error("Error saving order:", error);
+    res.status(500).send("Failed to save order");
+  }
 });
 
+
+app.post("/signup", Signup);
+app.post("/login", Login);
+app.post("/logout", Logout);
+app.post("/verify", userVerification);
 
 app.listen(PORT, () => {
   console.log("App started on port " + PORT + "!");

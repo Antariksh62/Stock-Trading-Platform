@@ -1,33 +1,42 @@
-import React, { useState } from "react";
+import React, { useState, useContext } from "react";
 import { Link } from "react-router-dom";
-
 import axios from "axios";
-
 import GeneralContext from "./GeneralContext";
-
 import "./BuyActionWindow.css";
 
-const BuyActionWindow = ({ uid }) => {
+const BuyActionWindow = ({ uid, mode = "BUY" }) => {
   const [stockQuantity, setStockQuantity] = useState(1);
   const [stockPrice, setStockPrice] = useState(0.0);
+  const { closeBuyWindow } = useContext(GeneralContext);
 
-  const handleBuyClick = () => {
-    axios.post("http://localhost:3001/newOrder", {
-      name: uid,
-      qty: stockQuantity,
-      price: stockPrice,
-      mode: "BUY",
-    });
+  const isSell = mode === "SELL";
 
-    GeneralContext.closeBuyWindow();
+  const handleOrderClick = async () => {
+    try {
+      await axios.post("http://localhost:3001/newOrder", {
+        name: uid,
+        qty: Number(stockQuantity),
+        price: Number(stockPrice),
+        mode: mode || "BUY",
+      });
+    } catch (error) {
+      console.error("Error placing order:", error);
+    }
+    closeBuyWindow();
   };
 
   const handleCancelClick = () => {
-    GeneralContext.closeBuyWindow();
+    closeBuyWindow();
   };
 
   return (
     <div className="container" id="buy-window" draggable="true">
+      <div className={`header ${isSell ? "header-sell" : ""}`}>
+        <h3>
+          {isSell ? "Sell" : "Buy"} {uid}
+        </h3>
+      </div>
+
       <div className="regular-order">
         <div className="inputs">
           <fieldset>
@@ -55,10 +64,14 @@ const BuyActionWindow = ({ uid }) => {
       </div>
 
       <div className="buttons">
-        <span>Margin required ₹140.65</span>
+        <span>Margin required ₹{(Number(stockQuantity) * (Number(stockPrice) || 140.65)).toFixed(2)}</span>
         <div>
-          <Link className="btn btn-blue" onClick={handleBuyClick}>
-            Buy
+          <Link
+            to=""
+            className={`btn ${isSell ? "btn-orange" : "btn-blue"}`}
+            onClick={handleOrderClick}
+          >
+            {isSell ? "Sell" : "Buy"}
           </Link>
           <Link to="" className="btn btn-grey" onClick={handleCancelClick}>
             Cancel

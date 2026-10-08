@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { VerticalGraph } from "./VerticalGraph";
 
 const Holdings = () => {
   const [allHoldings, setAllHoldings] = useState([]);
@@ -15,6 +16,19 @@ const Holdings = () => {
         console.error("Error fetching holdings:", err);
       });
   }, []);
+
+  const labels = allHoldings.map((subArray) => subArray["name"]);
+
+  const data = {
+    labels,
+    datasets: [
+      {
+        label: "Stock Price",
+        data: allHoldings.map((stock) => stock.price),
+        backgroundColor: "rgba(255, 99, 132, 0.5)",
+      },
+    ],
+  };
 
   return (
     <>
@@ -37,8 +51,11 @@ const Holdings = () => {
 
           <tbody>
             {allHoldings.map((stock, index) => {
-              const currValue = stock.price * stock.qty;
-              const pnl = currValue - stock.avg * stock.qty;
+              const qty = Number(stock.qty) || 0;
+              const avg = Number(stock.avg) || 0;
+              const price = Number(stock.price) || 0;
+              const currValue = price * qty;
+              const pnl = currValue - avg * qty;
               const isProfit = pnl >= 0.0;
               const profClass = isProfit ? "profit" : "loss";
               
@@ -49,9 +66,9 @@ const Holdings = () => {
               return (
                 <tr key={stock._id || index}>
                   <td>{stock.name}</td>
-                  <td>{stock.qty}</td>
-                  <td>{stock.avg.toFixed(2)}</td>
-                  <td>{stock.price.toFixed(2)}</td>
+                  <td>{qty}</td>
+                  <td>{avg.toFixed(2)}</td>
+                  <td>{price.toFixed(2)}</td>
                   <td>{currValue.toFixed(2)}</td>
                   <td className={profClass}>{pnl.toFixed(2)}</td>
                   <td className={profClass}>{stock.net}</td>
@@ -81,8 +98,10 @@ const Holdings = () => {
           <p>P&L</p>
         </div>
       </div>
+
+      {allHoldings.length > 0 && <VerticalGraph data={data} />}
     </>
   );
 };
 
-export default Holdings;
+export default Holdings;
