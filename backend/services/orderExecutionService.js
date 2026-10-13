@@ -26,10 +26,10 @@ const getOrCreateUserFunds = async (userId) => {
   if (!funds) {
     funds = await FundsModel.create({
       userId,
-      availableMargin: 100000.0,
+      availableMargin: 0.0,
       usedMargin: 0.0,
-      availableCash: 100000.0,
-      openingBalance: 100000.0,
+      availableCash: 0.0,
+      openingBalance: 0.0,
       payin: 0.0,
       span: 0.0,
       deliveryMargin: 0.0,
@@ -208,12 +208,17 @@ const processOrder = async ({
 
         if (ownedQty < numQty) {
           orderStatus = "REJECTED";
-          rejectionReason = `Insufficient holdings to sell. You own ${ownedQty} shares of ${symbol}, attempted to sell ${numQty} shares`;
+          const openPos = await PositionsModel.findOne({ userId, name: symbol, product: "MIS" });
+          if (openPos && openPos.qty >= numQty) {
+            rejectionReason = `You do not own ${symbol} in CNC (Holdings), but you have ${openPos.qty} shares in MIS (Intraday Positions). Switch product tab to MIS to exit this position.`;
+          } else {
+            rejectionReason = `Insufficient holdings to sell. You own ${ownedQty} shares of ${symbol}, attempted to sell ${numQty} shares`;
+          }
         } else {
           if (orderStatus === "FILLED") {
             const proceeds = totalCost;
             holding.qty = holding.qty - numQty;
-            if (holding.qty === 0) {
+            if (holding.qty <= 0) {
               await HoldingsModel.deleteOne({ _id: holding._id });
             } else {
               await holding.save();
@@ -227,16 +232,22 @@ const processOrder = async ({
           }
         }
       } else {
-        // MIS Short / Sell
+        // MIS Short / Sell (Square off intraday or short sell)
         if (orderStatus === "FILLED") {
           funds.availableCash = Number((funds.availableCash + totalCost).toFixed(2));
           funds.availableMargin = Number((funds.availableMargin + totalCost).toFixed(2));
+          funds.usedMargin = Math.max(0, Number((funds.usedMargin - totalCost).toFixed(2)));
           await funds.save();
 
           let position = await PositionsModel.findOne({ userId, name: symbol, product: "MIS" });
           if (position) {
             position.qty = position.qty - numQty;
-            await position.save();
+            if (position.qty <= 0) {
+              // Position is fully squared off
+              await PositionsModel.deleteOne({ _id: position._id });
+            } else {
+              await position.save();
+            }
           } else {
             await PositionsModel.create({
               userId,

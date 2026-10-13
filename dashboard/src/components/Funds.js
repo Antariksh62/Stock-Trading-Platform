@@ -15,10 +15,10 @@ const Funds = () => {
       try { return JSON.parse(saved); } catch (e) {}
     }
     return {
-      availableMargin: 25000.00,
+      availableMargin: 0.00,
       usedMargin: 0.00,
-      availableCash: 25000.00,
-      openingBalance: 25000.00,
+      availableCash: 0.00,
+      openingBalance: 0.00,
       payin: 0.00,
     };
   });
@@ -186,7 +186,7 @@ const Funds = () => {
             <div className="data" style={{ width: "100%", display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
               <p style={{ margin: 0, color: "#888", fontSize: "0.85rem" }}>Opening Balance</p>
               <p style={{ margin: 0, color: "#444", fontSize: "0.85rem", fontWeight: "500" }}>
-                ₹{(funds.openingBalance || 100000).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                ₹{(funds.openingBalance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </p>
             </div>
             <div className="data" style={{ width: "100%", display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>

@@ -2,7 +2,7 @@ import React, { useContext } from "react";
 import GeneralContext from "./GeneralContext";
 
 const Positions = () => {
-  const { positions: allPositions } = useContext(GeneralContext);
+  const { positions: allPositions, openBuyWindow } = useContext(GeneralContext);
 
   let totalPnL = 0;
 
@@ -38,48 +38,80 @@ const Positions = () => {
               <th>LTP</th>
               <th>P&L</th>
               <th>Chg.</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody>
-            {(allPositions || []).map((stock, index) => {
-              const qty = Number(stock.qty) || 0;
-              const avg = Number(stock.avg) || 0;
-              const price = Number(stock.price) || 0;
-              const currValue = price * qty;
-              const pnl = currValue - avg * qty;
-              const isProfit = pnl >= 0.0;
-              const profClass = isProfit ? "profit" : "loss";
-              const dayClass = stock.isLoss ? "loss" : "profit";
+            {allPositions && allPositions.length > 0 ? (
+              allPositions.map((stock, index) => {
+                const qty = Number(stock.qty) || 0;
+                const avg = Number(stock.avg) || 0;
+                const price = Number(stock.price) || 0;
+                const currValue = price * qty;
+                const pnl = currValue - avg * qty;
+                const isProfit = pnl >= 0.0;
+                const profClass = isProfit ? "profit" : "loss";
+                const dayClass = stock.isLoss ? "loss" : "profit";
 
-              return (
-                <tr key={stock._id || index}>
-                  <td>
-                    <span
-                      style={{
-                        padding: "2px 6px",
-                        borderRadius: "2px",
-                        fontSize: "0.68rem",
-                        fontWeight: "600",
-                        background: stock.product === "MIS" ? "#fff3e0" : "#e8f5e9",
-                        color: stock.product === "MIS" ? "#e65100" : "#2e7d32",
-                        border: stock.product === "MIS" ? "1px solid #ffe0b2" : "1px solid #c8e6c9",
-                      }}
-                    >
-                      {stock.product || "MIS"}
-                    </span>
-                  </td>
-                  <td style={{ fontWeight: "500" }}>{stock.name}</td>
-                  <td>{qty}</td>
-                  <td>{avg.toFixed(2)}</td>
-                  <td>{price.toFixed(2)}</td>
-                  <td className={profClass} style={{ fontWeight: "600" }}>
-                    {isProfit ? "+" : ""}
-                    {pnl.toFixed(2)}
-                  </td>
-                  <td className={dayClass}>{stock.day || "+0.00%"}</td>
-                </tr>
-              );
-            })}
+                return (
+                  <tr key={stock._id || index}>
+                    <td>
+                      <span
+                        style={{
+                          padding: "2px 6px",
+                          borderRadius: "2px",
+                          fontSize: "0.68rem",
+                          fontWeight: "600",
+                          background: stock.product === "MIS" ? "#fff3e0" : "#e8f5e9",
+                          color: stock.product === "MIS" ? "#e65100" : "#2e7d32",
+                          border: stock.product === "MIS" ? "1px solid #ffe0b2" : "1px solid #c8e6c9",
+                        }}
+                      >
+                        {stock.product || "MIS"}
+                      </span>
+                    </td>
+                    <td style={{ fontWeight: "500" }}>{stock.name}</td>
+                    <td>{qty}</td>
+                    <td>{avg.toFixed(2)}</td>
+                    <td>{price.toFixed(2)}</td>
+                    <td className={profClass} style={{ fontWeight: "600" }}>
+                      {isProfit ? "+" : ""}
+                      {pnl.toFixed(2)}
+                    </td>
+                    <td className={dayClass}>{stock.day || "+0.00%"}</td>
+                    <td>
+                      <button
+                        onClick={() => openBuyWindow && openBuyWindow(stock.name, "SELL", price, "MIS", qty)}
+                        style={{
+                          padding: "3px 10px",
+                          fontSize: "0.72rem",
+                          background: "#ff5722",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "3px",
+                          cursor: "pointer",
+                          fontWeight: "500",
+                        }}
+                        title="Square off this intraday position"
+                      >
+                        Exit
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
+            ) : (
+              <tr>
+                <td colSpan="8" style={{ textAlign: "center", padding: "40px 20px", color: "#666" }}>
+                  <div style={{ fontSize: "1.1rem", fontWeight: "500", marginBottom: "8px", color: "#444" }}>
+                    No open intraday positions
+                  </div>
+                  <div style={{ fontSize: "0.85rem", color: "#888" }}>
+                    Place an <strong>MIS (Margin Intraday Square-off)</strong> trade to take intraday positions.
+                  </div>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

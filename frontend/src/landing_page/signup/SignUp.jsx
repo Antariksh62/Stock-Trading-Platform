@@ -50,7 +50,8 @@ function SignUp() {
         }
 
         setTimeout(() => {
-          window.location.href = "http://localhost:3000";
+          const userParam = encodeURIComponent(JSON.stringify(data.user || {}));
+          window.location.href = `http://localhost:3000/?token=${data.token || ""}&user=${userParam}`;
         }, 1200);
       }
     } catch (error) {

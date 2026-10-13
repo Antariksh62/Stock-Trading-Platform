@@ -44,12 +44,21 @@ async function runTests() {
     await new Promise(r => setTimeout(r, 500));
     assert(socket.connected, 'WebSocket client connected and authenticated');
 
-    // 1. Initial Funds Check
-    console.log('\n--- 1. Funds Check ---');
+    // 1. Initial Funds Check (New account starts with ₹0)
+    console.log('\n--- 1. Funds Check (New Account Initial Balance ₹0) ---');
     const initialFundsRes = await axios.get(`${API_BASE}/api/funds?userId=${TEST_USER_ID}`);
-    assert(initialFundsRes.status === 200 && initialFundsRes.data.availableMargin > 0, 
-      'User initialized with default virtual funds (e.g. ₹1,00,000)');
-    const initialMargin = initialFundsRes.data.availableMargin;
+    assert(initialFundsRes.status === 200 && initialFundsRes.data.availableMargin === 0, 
+      'New user correctly initialized with ₹0.00 balance (must add funds via UPI)');
+
+    // 1b. Deposit Funds via UPI
+    console.log('\n--- 1b. UPI Deposit (+₹50,000) ---');
+    const addFundsRes = await axios.post(`${API_BASE}/api/funds/add`, {
+      userId: TEST_USER_ID,
+      amount: 50000,
+    });
+    assert(addFundsRes.status === 200 && addFundsRes.data.funds.availableMargin === 50000,
+      'Funds added successfully via UPI: ₹50,000');
+    const initialMargin = 50000;
 
     // 2. Buy Market Order Execution
     console.log('\n--- 2. Valid Buy Market Order ---');
@@ -160,8 +169,8 @@ async function runTests() {
     // 7. Concurrent Orders Concurrency Lock Test
     console.log('\n--- 7. Concurrent Orders Race Condition Protection ---');
     const concUser = 'conc_test_user_' + Date.now();
-    // Add small funds of 1000
-    await axios.get(`${API_BASE}/api/funds?userId=${concUser}`);
+    // Deposit 100,000 via UPI for concurrency test
+    await axios.post(`${API_BASE}/api/funds/add`, { userId: concUser, amount: 100000 });
     // Launch 5 parallel orders costing 500 each concurrently. Only 2 should succeed, 3 should fail.
     const promises = [1, 2, 3, 4, 5].map(i => 
       axios.post(`${API_BASE}/newOrder`, {

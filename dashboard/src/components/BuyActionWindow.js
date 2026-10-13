@@ -4,21 +4,48 @@ import GeneralContext from "./GeneralContext";
 import { watchList } from "../data/data";
 import "./BuyActionWindow.css";
 
-const BuyActionWindow = ({ uid, mode = "BUY", customPrice = null }) => {
+const BuyActionWindow = ({ uid, mode = "BUY", customPrice = null, initialProduct = null, initialQty = 1 }) => {
   const matchingStock = watchList.find((s) => s.name === uid);
   const basePrice = customPrice || (matchingStock ? matchingStock.price : 100.0);
 
-  const [stockQuantity, setStockQuantity] = useState(1);
+  const { closeBuyWindow, refreshData, holdings = [], positions = [] } = useContext(GeneralContext);
+
+  // Intelligently auto-detect product and quantity when selling
+  const matchingPosition = (positions || []).find((p) => p.name === uid);
+  const matchingHolding = (holdings || []).find((h) => h.name === uid);
+
+  const defaultProduct = initialProduct || (
+    mode === "SELL" && matchingPosition && !matchingHolding ? "MIS" : "CNC"
+  );
+
+  const defaultQty = initialQty > 1 ? initialQty : (
+    mode === "SELL" && matchingPosition && !matchingHolding ? Math.max(1, matchingPosition.qty) : (
+      mode === "SELL" && matchingHolding ? Math.max(1, matchingHolding.qty) : 1
+    )
+  );
+
+  const [stockQuantity, setStockQuantity] = useState(defaultQty);
   const [stockPrice, setStockPrice] = useState(basePrice);
   const [orderType, setOrderType] = useState("MARKET"); // "MARKET" | "LIMIT"
-  const [product, setProduct] = useState("CNC"); // "CNC" | "MIS"
+  const [product, setProduct] = useState(defaultProduct); // "CNC" | "MIS"
   const [limitPrice, setLimitPrice] = useState(basePrice);
 
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState(null); // { type: 'success' | 'error', message: string }
-
-  const { closeBuyWindow } = useContext(GeneralContext);
   const baseId = useId();
+
+  const getActiveUser = () => {
+    try {
+      const savedUser = localStorage.getItem("user");
+      if (savedUser) {
+        return JSON.parse(savedUser);
+      }
+    } catch (e) {}
+    return null;
+  };
+  const activeUser = getActiveUser();
+  const userId = activeUser?.id || activeUser?._id || activeUser?.username || "demo_user";
+  const token = localStorage.getItem("token");
 
   useEffect(() => {
     if (customPrice) {
@@ -40,11 +67,14 @@ const BuyActionWindow = ({ uid, mode = "BUY", customPrice = null }) => {
     setFeedback(null);
 
     const idempotencyKey = `order_${baseId}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const headers = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
 
     try {
       const response = await axios.post(
         "http://localhost:3001/newOrder",
         {
+          userId,
           name: uid,
           qty: parseInt(stockQuantity, 10),
           price: executionPrice,
@@ -54,7 +84,7 @@ const BuyActionWindow = ({ uid, mode = "BUY", customPrice = null }) => {
           limitPrice: orderType === "LIMIT" ? Number(limitPrice) : null,
           idempotencyKey,
         },
-        { withCredentials: true }
+        { headers, withCredentials: true }
       );
 
       if (response.data && response.data.success) {
@@ -62,9 +92,12 @@ const BuyActionWindow = ({ uid, mode = "BUY", customPrice = null }) => {
           type: "success",
           message: response.data.message || `Order placed successfully!`,
         });
+        if (typeof refreshData === "function") {
+          refreshData();
+        }
         setTimeout(() => {
           closeBuyWindow();
-        }, 1200);
+        }, 1000);
       } else {
         setFeedback({
           type: "error",
@@ -75,7 +108,7 @@ const BuyActionWindow = ({ uid, mode = "BUY", customPrice = null }) => {
       const errMessage =
         error.response?.data?.message ||
         error.response?.data?.rejectionReason ||
-        "Failed to place order. Check funds or network connectivity.";
+        "Failed to place order. If your wallet balance is ₹0, please visit the Funds tab to deposit money via UPI.";
       setFeedback({
         type: "error",
         message: errMessage,

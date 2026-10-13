@@ -86,7 +86,7 @@ const Summary = () => {
               Margins used <span>₹{formatCurrency(funds.usedMargin || 0)}</span>{" "}
             </p>
             <p>
-              Opening balance <span>₹{formatCurrency(funds.openingBalance || 100000)}</span>{" "}
+              Opening balance <span>₹{formatCurrency(funds.openingBalance ?? 0)}</span>{" "}
             </p>
           </div>
         </div>
@@ -94,26 +94,9 @@ const Summary = () => {
       </div>
 
       <div className="section">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2%" }}>
-          <span style={{ margin: 0 }}>
-            <p style={{ margin: 0 }}>Holdings ({holdings.length})</p>
-          </span>
-          <button
-            onClick={openAIAnalystWindow}
-            style={{
-              background: "transparent",
-              border: "1px solid #d0d7de",
-              color: "#387ed1",
-              fontSize: "0.75rem",
-              padding: "4px 10px",
-              borderRadius: "3px",
-              cursor: "pointer",
-              fontWeight: "500",
-            }}
-          >
-            ✦ Analyze Portfolio
-          </button>
-        </div>
+        <span>
+          <p>Holdings ({holdings.length})</p>
+        </span>
 
         <div className="data">
           <div className="first">

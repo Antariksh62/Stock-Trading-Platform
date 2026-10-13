@@ -48,17 +48,45 @@ const sectorMap = {
  * Perform server-side calculation of portfolio statistics and generate Gemini AI insights
  */
 const analyzePortfolio = async (userId = "demo_user") => {
-  // 1. Fetch user's actual holdings and funds from MongoDB
-  let holdings = await HoldingsModel.find({ $or: [{ userId }, { userId: { $exists: false } }] });
+  // 1. Fetch user's actual personal holdings and funds from MongoDB
+  let holdings = await HoldingsModel.find({ userId });
   let funds = await FundsModel.findOne({ userId });
 
   if (!funds) {
-    funds = { availableCash: 100000.0, availableMargin: 100000.0, usedMargin: 0.0 };
+    funds = { availableCash: 0.0, availableMargin: 0.0, usedMargin: 0.0 };
   }
 
-  // If no user-specific holdings, fallback to available holdings
+  // If user has no holdings, return an accurate empty-portfolio report
   if (!holdings || holdings.length === 0) {
-    holdings = await HoldingsModel.find({});
+    const cash = Number((funds.availableCash || 0).toFixed(2));
+    return {
+      success: true,
+      source: "gemini-2.5-flash",
+      timestamp: new Date().toISOString(),
+      metrics: {
+        totalInvestment: 0.0,
+        totalCurrentValue: 0.0,
+        totalPnL: 0.0,
+        pnlPercent: 0.0,
+        holdingsCount: 0,
+        availableCash: cash,
+        cashRatioPercent: 100,
+        topHolding: { name: "None", weightPercent: 0 },
+        topGainers: [],
+        topLosers: [],
+        sectorBreakdown: {},
+      },
+      analysis: {
+        overview: `Your investment portfolio currently has 0 active stock holdings with ₹0.00 invested. Available cash balance: ₹${cash.toLocaleString(undefined, { minimumFractionDigits: 2 })}.`,
+        topGainersLosers: "No equity positions have been taken yet to calculate winners or losers.",
+        concentrationAnalysis: "Your capital is currently 100% in liquid cash, with zero single-stock exposure.",
+        riskObservations: cash > 0
+          ? `You have ₹${cash.toLocaleString(undefined, { minimumFractionDigits: 2 })} in cash reserves ready for opportunistic entries once you select your target stocks.`
+          : "Your account balance is ₹0.00. Please deposit virtual funds via UPI in the Funds tab to begin building your portfolio.",
+        actionableSuggestions: "Visit the Watchlist on the left to analyze Indian and US equities, check technical charts, and execute your first paper trade.",
+      },
+      disclaimer: "This AI-assisted portfolio review is generated for informational and paper-trading practice purposes only and does not constitute certified financial or investment advice.",
+    };
   }
 
   // 2. Compute deterministic mathematical metrics

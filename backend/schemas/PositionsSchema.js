@@ -3,7 +3,7 @@ const { Schema } = require("mongoose");
 const PositionsSchema = new Schema({
   userId: {
     type: String,
-    default: "demo_user",
+    required: true,
     index: true,
   },
   product: {

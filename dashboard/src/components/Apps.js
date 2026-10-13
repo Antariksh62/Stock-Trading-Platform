@@ -6,7 +6,7 @@ const appsList = [
     name: "Smallcase",
     category: "Thematic Investing",
     tag: "Featured",
-    logoColor: "#1e88e5",
+    logo: "/media/images/smallcaseLogo.png",
     description: "Thematic investing platform that helps you invest in diversified baskets of stocks and ETFs based on ideas, sectors, and models.",
     features: ["Model portfolios", "Zero lock-in", "SIP enabled", "Track performance"],
     url: "https://smallcase.zerodha.com",
@@ -16,7 +16,7 @@ const appsList = [
     name: "Sensibull",
     category: "Options Trading",
     tag: "Options & F&O",
-    logoColor: "#7c4dff",
+    logo: "/media/images/sensibullLogo.svg",
     description: "India's largest options trading platform. Analyze options strategies, calculate payoff graphs, find trades, and analyze open interest.",
     features: ["Strategy builder", "Payoff analyzer", "Live Greeks", "F&O Screeners"],
     url: "https://sensibull.com",
@@ -26,7 +26,7 @@ const appsList = [
     name: "Streak",
     category: "Algo & Tech Trading",
     tag: "No-Code Algo",
-    logoColor: "#00b0ff",
+    logo: "/media/images/streakLogo.png",
     description: "Systematic trading platform for retail traders. Create, backtest, and deploy trading algorithms and strategies without coding.",
     features: ["No coding required", "Backtesting engine", "Dynamic scanners", "Real-time alerts"],
     url: "https://streak.tech",
@@ -36,7 +36,7 @@ const appsList = [
     name: "Tijori",
     category: "Fundamental Research",
     tag: "Research",
-    logoColor: "#00bfa5",
+    logo: "/media/images/tijori.svg",
     description: "Deep fundamental research platform for Indian companies, sector revenue breakdown, operational metrics, and raw material tracking.",
     features: ["Revenue breakdown", "Supply chain maps", "Peer comparison", "Capex tracker"],
     url: "https://tijorifinance.com",
@@ -46,7 +46,7 @@ const appsList = [
     name: "Quicko",
     category: "Tax & Compliance",
     tag: "Taxation",
-    logoColor: "#ff9100",
+    logo: "/media/images/quickoLogo.svg",
     description: "Tax filing and planning platform specifically designed for stock, crypto, and derivative traders with direct Zerodha P&L import.",
     features: ["1-click P&L import", "Automated ITR-3", "Tax loss harvesting", "CA assistance"],
     url: "https://quicko.com",
@@ -56,7 +56,7 @@ const appsList = [
     name: "Zerodha Fund House",
     category: "Mutual Funds & ETFs",
     tag: "Passive Funds",
-    logoColor: "#43a047",
+    logo: "/media/images/zerodhaFundhouse.png",
     description: "Simple, transparent, and low-cost passive index funds and ETFs designed to help retail investors build long-term wealth.",
     features: ["Ultra low expense", "Direct indexing", "Nifty 100 Index", "Liquid funds"],
     url: "https://zerodhafundhouse.com",
@@ -66,7 +66,7 @@ const appsList = [
     name: "Varsity by Zerodha",
     category: "Education & Learning",
     tag: "Free Certified",
-    logoColor: "#3949ab",
+    logo: "/media/images/varsityLogo.svg",
     description: "In-depth collection of stock market and financial education modules covering basics, technicals, fundamentals, and currencies.",
     features: ["14+ complete modules", "Certification quizzes", "Interactive illustrations", "Free for all"],
     url: "https://zerodha.com/varsity",
@@ -76,7 +76,7 @@ const appsList = [
     name: "GoldenPi",
     category: "Bonds & Fixed Income",
     tag: "Fixed Income",
-    logoColor: "#e91e63",
+    logo: "/media/images/goldenpiLogo.png",
     description: "Online bond platform for retail investors to invest in corporate bonds, Government securities (G-Secs), and secondary market debentures.",
     features: ["Fixed predictable returns", "Curated AAA bonds", "Direct demat credit", "Low risk profile"],
     url: "https://goldenpi.com",
@@ -151,26 +151,36 @@ const Apps = () => {
             }}
           >
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                   <div
                     style={{
-                      width: "36px",
-                      height: "36px",
+                      width: "60px",
+                      height: "42px",
                       borderRadius: "6px",
-                      background: app.logoColor,
-                      color: "#fff",
+                      background: "#fafbfc",
+                      border: "1px solid #eaedf0",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      fontSize: "1.1rem",
-                      fontWeight: "700",
+                      padding: "4px 6px",
+                      flexShrink: 0,
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
                     }}
                   >
-                    {app.name.charAt(0)}
+                    <img
+                      src={app.logo}
+                      alt={app.name}
+                      style={{
+                        maxWidth: "100%",
+                        maxHeight: "32px",
+                        objectFit: "contain",
+                        display: "block",
+                      }}
+                    />
                   </div>
                   <div>
-                    <h4 style={{ margin: 0, fontSize: "1.05rem", fontWeight: "600", color: "#333" }}>
+                    <h4 style={{ margin: 0, fontSize: "1.02rem", fontWeight: "600", color: "#333", lineHeight: "1.25" }}>
                       {app.name}
                     </h4>
                     <span style={{ fontSize: "0.72rem", color: "#888" }}>{app.category}</span>
@@ -181,10 +191,12 @@ const Apps = () => {
                   style={{
                     fontSize: "0.68rem",
                     fontWeight: "600",
-                    padding: "2px 8px",
+                    padding: "3px 8px",
                     borderRadius: "10px",
                     background: "#f0f4f8",
                     color: "#387ed1",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
                   }}
                 >
                   {app.tag}

@@ -24,6 +24,8 @@ export const GeneralContextProvider = (props) => {
   const [selectedStockUID, setSelectedStockUID] = useState("");
   const [selectedMode, setSelectedMode] = useState("BUY");
   const [selectedStockPrice, setSelectedStockPrice] = useState(null);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [selectedQty, setSelectedQty] = useState(1);
 
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [analyticsStockName, setAnalyticsStockName] = useState("");
@@ -36,10 +38,10 @@ export const GeneralContextProvider = (props) => {
   const [positions, setPositions] = useState([]);
   const [orders, setOrders] = useState([]);
   const [funds, setFunds] = useState({
-    availableMargin: 100000.0,
+    availableMargin: 0.0,
     usedMargin: 0.0,
-    availableCash: 100000.0,
-    openingBalance: 100000.0,
+    availableCash: 0.0,
+    openingBalance: 0.0,
     payin: 0.0,
   });
 
@@ -54,13 +56,22 @@ export const GeneralContextProvider = (props) => {
     return "demo_user";
   };
 
+  const getAuthHeaders = useCallback(() => {
+    const token = localStorage.getItem("token");
+    const userId = getActiveUserId();
+    const headers = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    return { headers, params: { userId }, withCredentials: true };
+  }, []);
+
   const refreshData = useCallback(async () => {
     try {
+      const config = getAuthHeaders();
       const [holdingsRes, positionsRes, ordersRes, fundsRes] = await Promise.all([
-        axios.get("http://localhost:3001/allHoldings", { withCredentials: true }),
-        axios.get("http://localhost:3001/allPositions", { withCredentials: true }),
-        axios.get("http://localhost:3001/allOrders", { withCredentials: true }),
-        axios.get("http://localhost:3001/api/funds", { withCredentials: true }),
+        axios.get("http://localhost:3001/allHoldings", config),
+        axios.get("http://localhost:3001/allPositions", config),
+        axios.get("http://localhost:3001/allOrders", config),
+        axios.get("http://localhost:3001/api/funds", config),
       ]);
 
       if (holdingsRes.data) setHoldings(holdingsRes.data);
@@ -73,12 +84,13 @@ export const GeneralContextProvider = (props) => {
     } catch (err) {
       console.warn("Initial REST fetch error (using fallback):", err.message);
     }
-  }, []);
+  }, [getAuthHeaders]);
 
   // Initialize Socket.IO connection and subscriptions
   useEffect(() => {
     const userId = getActiveUserId();
-    socketService.connect(userId);
+    const token = localStorage.getItem("token");
+    socketService.connect(userId, token);
 
     // Initial load
     refreshData();
@@ -115,11 +127,13 @@ export const GeneralContextProvider = (props) => {
     };
   }, [refreshData]);
 
-  const handleOpenBuyWindow = (uid, mode = "BUY", price = null) => {
+  const handleOpenBuyWindow = (uid, mode = "BUY", price = null, product = null, qty = 1) => {
     setIsBuyWindowOpen(true);
     setSelectedStockUID(uid);
     setSelectedMode(mode);
     setSelectedStockPrice(price);
+    setSelectedProduct(product);
+    setSelectedQty(qty || 1);
   };
 
   const handleCloseBuyWindow = () => {
@@ -127,6 +141,8 @@ export const GeneralContextProvider = (props) => {
     setSelectedStockUID("");
     setSelectedMode("BUY");
     setSelectedStockPrice(null);
+    setSelectedProduct(null);
+    setSelectedQty(1);
   };
 
   const handleOpenAnalyticsWindow = (stockName, stockData = null) => {
@@ -171,6 +187,8 @@ export const GeneralContextProvider = (props) => {
           uid={selectedStockUID}
           mode={selectedMode}
           customPrice={selectedStockPrice}
+          initialProduct={selectedProduct}
+          initialQty={selectedQty}
         />
       )}
       {isAnalyticsOpen && (

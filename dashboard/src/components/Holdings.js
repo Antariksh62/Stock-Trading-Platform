@@ -3,7 +3,7 @@ import { VerticalGraph } from "./VerticalGraph";
 import GeneralContext from "./GeneralContext";
 
 const Holdings = () => {
-  const { holdings: allHoldings, openAIAnalystWindow } = useContext(GeneralContext);
+  const { holdings: allHoldings, openAIAnalystWindow, openBuyWindow } = useContext(GeneralContext);
 
   let totalInvestment = 0;
   let totalCurrentValue = 0;
@@ -73,38 +73,70 @@ const Holdings = () => {
               <th>P&L</th>
               <th>Net chg.</th>
               <th>Day chg.</th>
+              <th>Action</th>
             </tr>
           </thead>
 
           <tbody>
-            {(allHoldings || []).map((stock, index) => {
-              const qty = Number(stock.qty) || 0;
-              const avg = Number(stock.avg) || 0;
-              const price = Number(stock.price) || 0;
-              const currValue = price * qty;
-              const pnl = currValue - avg * qty;
-              const isItemProfit = pnl >= 0.0;
-              const profClass = isItemProfit ? "profit" : "loss";
+            {allHoldings && allHoldings.length > 0 ? (
+              allHoldings.map((stock, index) => {
+                const qty = Number(stock.qty) || 0;
+                const avg = Number(stock.avg) || 0;
+                const price = Number(stock.price) || 0;
+                const currValue = price * qty;
+                const pnl = currValue - avg * qty;
+                const isItemProfit = pnl >= 0.0;
+                const profClass = isItemProfit ? "profit" : "loss";
 
-              const isDayLoss = typeof stock.day === "string" && stock.day.startsWith("-");
-              const dayClass = isDayLoss ? "loss" : "profit";
+                const isDayLoss = typeof stock.day === "string" && stock.day.startsWith("-");
+                const dayClass = isDayLoss ? "loss" : "profit";
 
-              return (
-                <tr key={stock._id || index}>
-                  <td style={{ fontWeight: "500" }}>{stock.name}</td>
-                  <td>{qty}</td>
-                  <td>{avg.toFixed(2)}</td>
-                  <td>{price.toFixed(2)}</td>
-                  <td>{currValue.toFixed(2)}</td>
-                  <td className={profClass} style={{ fontWeight: "600" }}>
-                    {isItemProfit ? "+" : ""}
-                    {pnl.toFixed(2)}
-                  </td>
-                  <td className={profClass}>{stock.net || "+0.00%"}</td>
-                  <td className={dayClass}>{stock.day || "+0.00%"}</td>
-                </tr>
-              );
-            })}
+                return (
+                  <tr key={stock._id || index}>
+                    <td style={{ fontWeight: "500" }}>{stock.name}</td>
+                    <td>{qty}</td>
+                    <td>{avg.toFixed(2)}</td>
+                    <td>{price.toFixed(2)}</td>
+                    <td>{currValue.toFixed(2)}</td>
+                    <td className={profClass} style={{ fontWeight: "600" }}>
+                      {isItemProfit ? "+" : ""}
+                      {pnl.toFixed(2)}
+                    </td>
+                    <td className={profClass}>{stock.net || "+0.00%"}</td>
+                    <td className={dayClass}>{stock.day || "+0.00%"}</td>
+                    <td>
+                      <button
+                        onClick={() => openBuyWindow && openBuyWindow(stock.name, "SELL", price, "CNC", qty)}
+                        style={{
+                          padding: "3px 10px",
+                          fontSize: "0.72rem",
+                          background: "#ff5722",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "3px",
+                          cursor: "pointer",
+                          fontWeight: "500",
+                        }}
+                        title="Sell shares from your CNC holdings"
+                      >
+                        Exit
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
+            ) : (
+              <tr>
+                <td colSpan="9" style={{ textAlign: "center", padding: "40px 20px", color: "#666" }}>
+                  <div style={{ fontSize: "1.1rem", fontWeight: "500", marginBottom: "8px", color: "#444" }}>
+                    You have no stock holdings yet
+                  </div>
+                  <div style={{ fontSize: "0.85rem", color: "#888" }}>
+                    Place a <strong>CNC (Cash & Carry)</strong> BUY order from the Watchlist to start building your delivery portfolio.
+                  </div>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

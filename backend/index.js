@@ -1,4 +1,5 @@
 require("dotenv").config();
+// Gemini API and WebSockets enabled
 
 const express = require("express");
 const http = require("http");
@@ -7,6 +8,7 @@ const bodyParser = require("body-parser");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const jwt = require("jsonwebtoken");
+const axios = require("axios");
 const { Server } = require("socket.io");
 
 const { HoldingsModel } = require("./model/HoldingsModel");
@@ -19,6 +21,7 @@ const { userVerification } = require("./middlewares/AuthMiddleware");
 
 const { processOrder, cancelOrder, getOrCreateUserFunds } = require("./services/orderExecutionService");
 const { analyzePortfolio } = require("./services/portfolioAnalystService");
+const { tickerService } = require("./services/tickerService");
 
 const PORT = process.env.PORT || 3001;
 const uri = process.env.MONGO_URL;
@@ -56,6 +59,9 @@ io.on("connection", (socket) => {
   socket.join(userRoom);
   console.log(`[WebSocket] Client ${socket.id} connected and joined room: ${userRoom}`);
 
+  // Push immediate cached ticker state on connect
+  socket.emit("ticker_update", tickerService.getLatest());
+
   socket.on("disconnect", () => {
     console.log(`[WebSocket] Client ${socket.id} disconnected`);
   });
@@ -66,9 +72,9 @@ const broadcastUserUpdates = async (userId) => {
   try {
     const room = `user_${userId}`;
     const [holdings, positions, orders, funds] = await Promise.all([
-      HoldingsModel.find({ $or: [{ userId }, { userId: { $exists: false } }] }),
-      PositionsModel.find({ $or: [{ userId }, { userId: { $exists: false } }] }),
-      OrdersModel.find({ $or: [{ userId }, { userId: "demo_user" }] }).sort({ createdAt: -1 }),
+      HoldingsModel.find({ userId }),
+      PositionsModel.find({ userId }),
+      OrdersModel.find({ userId }).sort({ createdAt: -1 }),
       getOrCreateUserFunds(userId),
     ]);
 
@@ -108,60 +114,14 @@ const authHelper = (req, res, next) => {
 };
 
 // ==========================================
-// 1. DATA SEEDING ROUTES (Legacy compatibility)
+// 1. DATA SEEDING ROUTES (Deprecated - Holdings and Positions are generated dynamically via live orders)
 // ==========================================
-app.get("/addHoldings", async (req, res) => {
-  let tempHoldings = [
-    { name: "RELIANCE", qty: 10, avg: 2450.0, price: 2890.5, net: "+17.98%", day: "+1.25%" },
-    { name: "TCS", qty: 5, avg: 3500.0, price: 3950.2, net: "+12.86%", day: "-0.45%" },
-    { name: "HDFCBANK", qty: 15, avg: 1420.0, price: 1680.0, net: "+18.31%", day: "+0.80%" },
-    { name: "INFY", qty: 12, avg: 1380.0, price: 1540.75, net: "+11.65%", day: "-1.10%" },
-    { name: "ICICIBANK", qty: 20, avg: 890.0, price: 1120.3, net: "+25.88%", day: "+0.65%" },
-    { name: "BHARTIARTL", qty: 8, avg: 820.0, price: 1210.4, net: "+47.61%", day: "+2.15%" },
-    { name: "HINDUNILVR", qty: 6, avg: 2400.0, price: 2520.0, net: "+5.00%", day: "-0.30%" },
-    { name: "ITC", qty: 50, avg: 380.0, price: 435.6, net: "+14.63%", day: "+0.40%" },
-    { name: "SBIN", qty: 25, avg: 580.0, price: 780.25, net: "+34.53%", day: "+1.80%" },
-    { name: "LTIM", qty: 4, avg: 4800.0, price: 5120.0, net: "+6.67%", day: "-0.85%" },
-  ];
-
-  try {
-    for (let item of tempHoldings) {
-      await HoldingsModel.updateOne(
-        { name: item.name },
-        { $set: item },
-        { upsert: true }
-      );
-    }
-    res.send("Holdings seeded successfully");
-  } catch (error) {
-    console.error("Error seeding holdings:", error);
-    res.status(500).send("Something went wrong");
-  }
+app.get("/addHoldings", (req, res) => {
+  res.json({ message: "Seeding disabled. Holdings are generated automatically when CNC buy orders are executed." });
 });
 
-app.get("/addPositions", async (req, res) => {
-  let tempPositions = [
-    { product: "CNC", name: "EICHERMOT", qty: 2, avg: 3120.0, price: 3225.0, net: "+3.37%", day: "+0.85%", isLoss: false },
-    { product: "MIS", name: "TATAMOTORS", qty: 22, avg: 720.0, price: 980.0, net: "+36.11%", day: "+1.15%", isLoss: false },
-    { product: "MIS", name: "ADANIENT", qty: 6, avg: 2800.0, price: 3120.0, net: "+11.43%", day: "-1.50%", isLoss: true },
-    { product: "CNC", name: "ADANIPORTS", qty: 12, avg: 1100.0, price: 1340.0, net: "+21.82%", day: "+0.90%", isLoss: false },
-    { product: "MIS", name: "COALINDIA", qty: 30, avg: 380.0, price: 450.0, net: "+18.42%", day: "-0.40%", isLoss: true },
-    { product: "CNC", name: "ONGC", qty: 45, avg: 210.0, price: 268.0, net: "+27.62%", day: "+1.30%", isLoss: false },
-  ];
-
-  try {
-    for (let item of tempPositions) {
-      await PositionsModel.updateOne(
-        { name: item.name },
-        { $set: item },
-        { upsert: true }
-      );
-    }
-    res.send("Positions seeded successfully");
-  } catch (error) {
-    console.error("Error seeding positions:", error);
-    res.status(500).send("Something went wrong");
-  }
+app.get("/addPositions", (req, res) => {
+  res.json({ message: "Seeding disabled. Positions are generated automatically when MIS buy orders are executed." });
 });
 
 // ==========================================
@@ -169,9 +129,7 @@ app.get("/addPositions", async (req, res) => {
 // ==========================================
 app.get("/allHoldings", authHelper, async (req, res) => {
   try {
-    const allHoldings = await HoldingsModel.find({
-      $or: [{ userId: req.userId }, { userId: { $exists: false } }],
-    });
+    const allHoldings = await HoldingsModel.find({ userId: req.userId });
     res.json(allHoldings);
   } catch (error) {
     console.error("Error fetching holdings:", error);
@@ -181,9 +139,7 @@ app.get("/allHoldings", authHelper, async (req, res) => {
 
 app.get("/allPositions", authHelper, async (req, res) => {
   try {
-    const allPositions = await PositionsModel.find({
-      $or: [{ userId: req.userId }, { userId: { $exists: false } }],
-    });
+    const allPositions = await PositionsModel.find({ userId: req.userId });
     res.json(allPositions);
   } catch (error) {
     console.error("Error fetching positions:", error);
@@ -193,9 +149,7 @@ app.get("/allPositions", authHelper, async (req, res) => {
 
 app.get("/allOrders", authHelper, async (req, res) => {
   try {
-    const allOrders = await OrdersModel.find({
-      $or: [{ userId: req.userId }, { userId: "demo_user" }],
-    }).sort({ createdAt: -1 });
+    const allOrders = await OrdersModel.find({ userId: req.userId }).sort({ createdAt: -1 });
     res.json(allOrders);
   } catch (error) {
     console.error("Error fetching orders:", error);
@@ -252,6 +206,74 @@ const handleCancelOrderReq = async (req, res) => {
 };
 app.post("/cancelOrder/:id", authHelper, handleCancelOrderReq);
 app.put("/cancelOrder/:id", authHelper, handleCancelOrderReq);
+
+// ==========================================
+// 2b. REAL-TIME MARKET INDICES (Yahoo Finance Live Data)
+// ==========================================
+let indicesCache = null;
+let lastIndicesFetch = 0;
+
+app.get("/api/indices", async (req, res) => {
+  const now = Date.now();
+  if (indicesCache && now - lastIndicesFetch < 30000) {
+    return res.json(indicesCache);
+  }
+
+  // Calculate market status in IST (UTC+5:30)
+  const d = new Date();
+  const utc = d.getTime() + d.getTimezoneOffset() * 60000;
+  const ist = new Date(utc + 5.5 * 3600000);
+  const day = ist.getDay(); // 0 is Sun, 6 is Sat
+  const mins = ist.getHours() * 60 + ist.getMinutes();
+  const isMarketOpen = day >= 1 && day <= 5 && mins >= 9 * 60 + 15 && mins <= 15 * 60 + 30;
+
+  try {
+    const [niftyRes, sensexRes, ndxRes] = await Promise.all([
+      axios.get("https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI", { headers: { "User-Agent": "Mozilla/5.0" }, timeout: 7000 }),
+      axios.get("https://query1.finance.yahoo.com/v8/finance/chart/%5EBSESN", { headers: { "User-Agent": "Mozilla/5.0" }, timeout: 7000 }),
+      axios.get("https://query1.finance.yahoo.com/v8/finance/chart/%5ENDX", { headers: { "User-Agent": "Mozilla/5.0" }, timeout: 7000 }),
+    ]);
+
+    const formatIndex = (resObj, name) => {
+      const meta = resObj.data?.chart?.result?.[0]?.meta;
+      if (!meta) return null;
+      const price = Number(meta.regularMarketPrice || 0);
+      const prevClose = Number(meta.chartPreviousClose || price);
+      const diff = price - prevClose;
+      const pct = prevClose > 0 ? (diff / prevClose) * 100 : 0;
+      return {
+        name,
+        points: Number(price.toFixed(2)),
+        percent: (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%",
+        isDown: pct < 0,
+        prevClose: Number(prevClose.toFixed(2)),
+      };
+    };
+
+    const nifty = formatIndex(niftyRes, "NIFTY 50") || { name: "NIFTY 50", points: 22520.45, percent: "+1.30%", isDown: false };
+    const sensex = formatIndex(sensexRes, "SENSEX") || { name: "SENSEX", points: 72472.33, percent: "+1.23%", isDown: false };
+    const nasdaq = formatIndex(ndxRes, "NASDAQ 100") || { name: "NASDAQ 100", points: 20883.15, percent: "+0.51%", isDown: false };
+
+    indicesCache = {
+      isMarketOpen,
+      lastUpdated: new Date().toISOString(),
+      indices: { nifty, sensex, nasdaq },
+    };
+    lastIndicesFetch = now;
+    return res.json(indicesCache);
+  } catch (err) {
+    if (indicesCache) return res.json(indicesCache);
+    return res.json({
+      isMarketOpen,
+      lastUpdated: new Date().toISOString(),
+      indices: {
+        nifty: { name: "NIFTY 50", points: 22520.45, percent: "+1.30%", isDown: false },
+        sensex: { name: "SENSEX", points: 72472.33, percent: "+1.23%", isDown: false },
+        nasdaq: { name: "NASDAQ 100", points: 20883.15, percent: "+0.51%", isDown: false },
+      },
+    });
+  }
+});
 
 // ==========================================
 // 3. FUNDS MANAGEMENT ROUTES
@@ -334,11 +356,28 @@ app.post("/login", Login);
 app.post("/logout", Logout);
 app.post("/verify", userVerification);
 
+app.get("/api/ticker", (req, res) => {
+  res.json(tickerService.getLatest());
+});
+
+app.get("/api/quotes", async (req, res) => {
+  try {
+    const rawSymbols = req.query.symbols || "";
+    const symbols = rawSymbols ? rawSymbols.split(",").map((s) => s.trim()).filter(Boolean) : [];
+    const result = await tickerService.getQuotesForSymbols(symbols);
+    res.json(result);
+  } catch (err) {
+    console.warn("[/api/quotes] Error:", err.message);
+    res.json({ quotes: {}, rateLimitExhausted: true, message: "Error fetching quotes: " + err.message });
+  }
+});
+
 // ==========================================
 // 6. SERVER INITIALIZATION
 // ==========================================
 server.listen(PORT, () => {
   console.log(`Zerodha Backend running on port ${PORT} with WebSocket support!`);
+  tickerService.start(io);
   mongoose
     .connect(uri)
     .then(() => console.log("Connected to MongoDB Atlas!"))

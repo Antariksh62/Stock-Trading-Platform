@@ -36,7 +36,7 @@ class SocketService {
     });
 
     // Wire up events to registered listeners
-    ["holdings_update", "positions_update", "orders_update", "funds_update"].forEach((event) => {
+    ["holdings_update", "positions_update", "orders_update", "funds_update", "ticker_update"].forEach((event) => {
       this.socket.on(event, (data) => {
         const callbacks = this.listeners.get(event) || [];
         callbacks.forEach((cb) => cb(data));

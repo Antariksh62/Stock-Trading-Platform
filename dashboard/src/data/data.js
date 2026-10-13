@@ -1,4 +1,9 @@
-export const watchList = [
+import { nifty50Stocks, nasdaq100Stocks } from "./stocksData";
+
+export const watchList = [...nifty50Stocks, ...nasdaq100Stocks];
+
+// eslint-disable-next-line no-unused-vars
+const legacyWatchList = [
   {
     name: "RELIANCE",
     price: 2890.50,

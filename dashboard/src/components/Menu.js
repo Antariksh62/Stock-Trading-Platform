@@ -25,6 +25,16 @@ const Menu = () => {
       .then((res) => {
         if (res.data.status && res.data.user) {
           setUsername(res.data.user.toUpperCase());
+          if (res.data.userId) {
+            localStorage.setItem(
+              "user",
+              JSON.stringify({
+                id: res.data.userId,
+                username: res.data.user,
+                email: res.data.email,
+              })
+            );
+          }
         }
       })
       .catch((err) => {

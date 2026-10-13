@@ -8,7 +8,7 @@ const FundsSchema = new Schema({
   },
   availableMargin: {
     type: Number,
-    default: 100000.0,
+    default: 0.0,
   },
   usedMargin: {
     type: Number,
@@ -16,11 +16,11 @@ const FundsSchema = new Schema({
   },
   availableCash: {
     type: Number,
-    default: 100000.0,
+    default: 0.0,
   },
   openingBalance: {
     type: Number,
-    default: 100000.0,
+    default: 0.0,
   },
   payin: {
     type: Number,

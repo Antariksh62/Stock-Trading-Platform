@@ -19,6 +19,7 @@ module.exports.userVerification = (req, res) => {
           return res.json({
             status: true,
             user: user.username,
+            userId: user._id.toString(),
             email: user.email,
           });
         } else {
