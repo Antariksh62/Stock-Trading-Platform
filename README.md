@@ -359,10 +359,15 @@ TWELVE_DATA_API_KEY=your_twelve_data_api_key_here
 # Google Gemini API Key for AI Portfolio Diagnostics
 # Optional: If omitted or invalid, the backend uses a built-in deterministic rule engine.
 GEMINI_API_KEY=your_gemini_api_key_here
+
+# Graphify Knowledge Graph & Visual Chart Engine
+# Optional: Path to knowledge graph artifacts and structural codebase mapping.
+GRAPHIFY_ENABLED=true
+GRAPHIFY_PATH=../graphify-out
 ```
 
 > [!IMPORTANT]
-> Neither the `frontend` nor `dashboard` applications require `.env` files for standard local development. They default automatically to `http://localhost:3001` for API requests and WebSockets.
+> Neither the `frontend` nor `dashboard` applications require `.env` files for standard local development. They default automatically to `http://localhost:3001` for API requests and WebSockets. A ready-to-use template is also available at [`backend/.env.example`](file:///d:/Desktop/zerodha/backend/.env.example).
 
 ---
 
@@ -811,9 +816,27 @@ npm run build
 - [x] Multi-page responsive marketing website with user registration and login.
 - [x] Full brand partner showcase (Smallcase, Sensibull, Quicko, Tijori, Streak, etc.) with official logos.
 
+### Partially Implemented / In Progress
+- [ ] **GTT (Good Till Triggered) Orders**: Database schema supports order conditions, but background trigger daemons are not yet active.
+- [ ] **Interactive Option Chain**: Strategy payoff graphs are presented via partner apps; native option chain visualizer is in development.
+
+### Potential Future Improvements
+- [ ] Redis-backed distributed mutex locking for horizontal backend scaling across multiple server instances.
+- [ ] Historical backtesting engine for custom algorithmic trading strategies.
+- [ ] Dark / Light mode toggle switch persisting to user preferences.
+- [ ] Exportable tax and P&L reports in CSV and PDF formats replicating Zerodha Console.
 
 ---
 
+## Contributing & License
+
+### Contributing
+Contributions, issues, and feature proposals are welcome!
+1. Fork the project repository.
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`).
+3. Commit your modifications (`git commit -m "Add AmazingFeature"`).
+4. Push to the branch (`git push origin feature/AmazingFeature`).
+5. Open a Pull Request.
 
 ### License
 This project is open-source and distributed under the **ISC License**. See the `package.json` manifests for details.
