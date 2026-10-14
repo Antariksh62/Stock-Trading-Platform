@@ -816,27 +816,8 @@ npm run build
 - [x] Multi-page responsive marketing website with user registration and login.
 - [x] Full brand partner showcase (Smallcase, Sensibull, Quicko, Tijori, Streak, etc.) with official logos.
 
-### Partially Implemented / In Progress
-- [ ] **GTT (Good Till Triggered) Orders**: Database schema supports order conditions, but background trigger daemons are not yet active.
-- [ ] **Interactive Option Chain**: Strategy payoff graphs are presented via partner apps; native option chain visualizer is in development.
-
-### Potential Future Improvements
-- [ ] Redis-backed distributed mutex locking for horizontal backend scaling across multiple server instances.
-- [ ] Historical backtesting engine for custom algorithmic trading strategies.
-- [ ] Dark / Light mode toggle switch persisting to user preferences.
-- [ ] Exportable tax and P&L reports in CSV and PDF formats replicating Zerodha Console.
-
 ---
 
-## Contributing & License
-
-### Contributing
-Contributions, issues, and feature proposals are welcome!
-1. Fork the project repository.
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`).
-3. Commit your modifications (`git commit -m "Add AmazingFeature"`).
-4. Push to the branch (`git push origin feature/AmazingFeature`).
-5. Open a Pull Request.
 
 ### License
 This project is open-source and distributed under the **ISC License**. See the `package.json` manifests for details.
