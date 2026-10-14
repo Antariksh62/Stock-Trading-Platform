@@ -62,6 +62,7 @@ coverage/
 # Graphify Knowledge Graph Artifacts
 # =================================
 # Ignore local interpreter paths, scan root sidecars, temp extraction files & caches
+graphify-out/
 graphify-out/.graphify_*
 graphify-out/cache/
 graphify-out/*.log
