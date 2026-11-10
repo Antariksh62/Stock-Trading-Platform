@@ -1,25 +1,109 @@
-html, body {
-  overflow-x: hidden;
-  max-width: 100%;
-  margin: 0;
-    padding: 0;
-    width: 100%;
-    overflow-x: hidden;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+* {
+  box-sizing: border-box;
 }
 
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  overflow-x: hidden;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif !important;
+  color: #424242;
+  background-color: #ffffff;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
 
+/* 
+ * CRITICAL FIX: Ensure all .container elements are strictly centered
+ * with proper Zerodha gutters and side margins across desktop and mobile.
+ */
+.container,
+div.container,
+div.container-fluid.container-boxed {
+  width: 100% !important;
+  max-width: 1120px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding-left: 28px !important;
+  padding-right: 28px !important;
+  box-sizing: border-box !important;
+}
+
+@media (min-width: 1200px) {
+  .container,
+  div.container {
+    max-width: 1140px !important;
+    padding-left: 36px !important;
+    padding-right: 36px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .container,
+  div.container {
+    padding-left: 18px !important;
+    padding-right: 18px !important;
+  }
+}
+
+/* Navbar container */
+nav.max-w-7xl,
+.navbar-container {
+  max-width: 1140px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding-left: 28px !important;
+  padding-right: 28px !important;
+}
+
+/* Typography matching Zerodha exact design system */
+h1, h2, h3, h4, h5, h6 {
+  color: #424242;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  margin-top: 0;
+}
+
+h2 {
+  font-size: 2rem;
+  line-height: 1.35;
+}
+
+h3 {
+  font-size: 1.6rem;
+  line-height: 1.4;
+}
+
+h4 {
+  font-size: 1.25rem;
+  line-height: 1.5;
+}
+
+p {
+  color: #666666;
+  font-size: 1rem;
+  line-height: 1.8;
+  margin-bottom: 1.25rem;
+}
+
+a {
+  color: #387ed1;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+a:hover {
+  color: #205fb1;
+  text-decoration: none;
+}
 
 .force-white {
   background-color: white !important;
 }
 
-.nav-link{
-    margin-left: 50px;
+.nav-link {
+  margin-left: 35px;
 }
-
-.a{
-    text-decoration : none !important;
-}
-
-/* src/index.css */
-

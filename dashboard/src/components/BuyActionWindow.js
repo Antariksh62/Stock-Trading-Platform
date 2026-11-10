@@ -89,16 +89,27 @@ const BuyActionWindow = ({ uid, mode = "BUY", customPrice = null, initialProduct
       );
 
       if (response.data && response.data.success) {
-        setFeedback({
-          type: "success",
-          message: response.data.message || `Order placed successfully!`,
-        });
-        if (typeof refreshData === "function") {
-          refreshData();
+        const isGuest = !token || userId === "demo_user";
+        if (isGuest) {
+          setFeedback({
+            type: "guest_notice",
+            message: `Trial order placed for ${stockQuantity}x ${uid}! Note: You are trading in Guest Trial Mode. Sign in or register to permanently save your orders and portfolio.`,
+          });
+          if (typeof refreshData === "function") {
+            refreshData();
+          }
+        } else {
+          setFeedback({
+            type: "success",
+            message: response.data.message || `Order placed successfully!`,
+          });
+          if (typeof refreshData === "function") {
+            refreshData();
+          }
+          setTimeout(() => {
+            closeBuyWindow();
+          }, 1000);
         }
-        setTimeout(() => {
-          closeBuyWindow();
-        }, 1000);
       } else {
         setFeedback({
           type: "error",
@@ -262,13 +273,61 @@ const BuyActionWindow = ({ uid, mode = "BUY", customPrice = null, initialProduct
             padding: "8px 12px",
             borderRadius: "3px",
             fontSize: "0.78rem",
-            background: feedback.type === "success" ? "#e8f5e9" : "#ffebee",
-            color: feedback.type === "success" ? "#2e7d32" : "#c62828",
-            border: feedback.type === "success" ? "1px solid #c8e6c9" : "1px solid #ffcdd2",
+            background:
+              feedback.type === "guest_notice"
+                ? "#fff8e6"
+                : feedback.type === "success"
+                ? "#e8f5e9"
+                : "#ffebee",
+            color:
+              feedback.type === "guest_notice"
+                ? "#8a5800"
+                : feedback.type === "success"
+                ? "#2e7d32"
+                : "#c62828",
+            border:
+              feedback.type === "guest_notice"
+                ? "1px solid #ffe0b2"
+                : feedback.type === "success"
+                ? "1px solid #c8e6c9"
+                : "1px solid #ffcdd2",
             lineHeight: "1.4",
           }}
         >
-          {feedback.message}
+          <div>{feedback.message}</div>
+          {feedback.type === "guest_notice" && (
+            <div style={{ marginTop: "8px", display: "flex", gap: "8px", alignItems: "center" }}>
+              <a
+                href="/signup"
+                style={{
+                  display: "inline-block",
+                  backgroundColor: "#387ed1",
+                  color: "#fff",
+                  padding: "4px 10px",
+                  borderRadius: "3px",
+                  textDecoration: "none",
+                  fontWeight: 600,
+                  fontSize: "0.75rem",
+                }}
+              >
+                Sign In / Register &rarr;
+              </a>
+              <button
+                type="button"
+                onClick={closeBuyWindow}
+                style={{
+                  background: "#fff",
+                  border: "1px solid #d0d0d0",
+                  padding: "3px 8px",
+                  borderRadius: "3px",
+                  fontSize: "0.75rem",
+                  cursor: "pointer",
+                }}
+              >
+                Continue Practice
+              </button>
+            </div>
+          )}
         </div>
       )}
 

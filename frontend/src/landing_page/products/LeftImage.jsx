@@ -10,33 +10,56 @@ function LeftImage({
     appStore
 }) {
     return (
-        <div className="container">
-            <div className="row p-5">
+        <div className="container my-5 py-3">
+            <div className="row align-items-center">
                 
-                <div className="col-8 p-5" style={ {marginRight : ""} }>
-                    <img src={imageURL} alt="" style={ {width : "90%"} }/>
+                {/* Product Screenshot */}
+                <div className="col-lg-7 col-md-6 col-12 text-center mb-4 mb-md-0">
+                    <img 
+                        src={imageURL} 
+                        alt={productName} 
+                        className="img-fluid"
+                        style={{ width: "90%", maxWidth: "560px" }}
+                    />
                 </div>
 
-                <div className="col-4 p-5 mt-5">
-                    <h1>{productName}</h1>
-                    <br />
-                    <p>{productDescription}</p>
+                {/* Product Details */}
+                <div className="col-lg-5 col-md-6 col-12 ps-lg-5">
+                    <h2 className="mb-3" style={{ fontSize: "1.85rem", fontWeight: 500, color: "#424242" }}>
+                        {productName}
+                    </h2>
                     
-                    <div>
-                        <a href={tryDemo}>Try Demo</a>
-                        <a href={learnMore} style={{ marginLeft: "50px" }}>
-                            Learn More
-                        </a>
+                    <p style={{ color: "#666", lineHeight: 1.8, fontSize: "0.95rem", marginBottom: "1.5rem" }}>
+                        {productDescription}
+                    </p>
+                    
+                    <div className="mb-4" style={{ display: "flex", gap: "28px" }}>
+                        {tryDemo && (
+                            <a href={tryDemo} style={{ textDecoration: "none", color: "#387ed1", fontWeight: 500, fontSize: "0.95rem" }}>
+                                Try Demo &rarr;
+                            </a>
+                        )}
+                        {learnMore && (
+                            <a href={learnMore} style={{ textDecoration: "none", color: "#387ed1", fontWeight: 500, fontSize: "0.95rem" }}>
+                                Learn More &rarr;
+                            </a>
+                        )}
                     </div>
                     
-                    <div className="mt-3">
-                        <a href={googlePlay} style={ {marginRight : "20px"}  }>
-                            <img src="media/images/googlePlayBadge.svg" alt="Google Play" />
-                        </a>
-                        <a href={appStore}>
-                            <img src="media/images/appstoreBadge.svg" alt="App Store" />
-                        </a>
-                    </div>
+                    {(googlePlay || appStore) && (
+                        <div className="d-flex align-items-center" style={{ gap: "16px" }}>
+                            {googlePlay && (
+                                <a href={googlePlay} target="_blank" rel="noreferrer">
+                                    <img src="media/images/googlePlayBadge.svg" alt="Google Play" style={{ height: "40px" }} />
+                                </a>
+                            )}
+                            {appStore && (
+                                <a href={appStore} target="_blank" rel="noreferrer">
+                                    <img src="media/images/appstoreBadge.svg" alt="App Store" style={{ height: "40px" }} />
+                                </a>
+                            )}
+                        </div>
+                    )}
                     
                 </div>
 
