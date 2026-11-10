@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
+import { API_BASE } from "../config";
 
 const AIPortfolioAnalystModal = ({ onClose }) => {
   const [data, setData] = useState(null);
@@ -10,7 +11,7 @@ const AIPortfolioAnalystModal = ({ onClose }) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await axios.post("http://localhost:3001/api/portfolio/analyze", {}, { withCredentials: true });
+      const res = await axios.post(`${API_BASE}/api/portfolio/analyze`, {}, { withCredentials: true });
       if (res.data && res.data.success) {
         setData(res.data);
       } else {

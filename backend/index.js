@@ -1,3 +1,6 @@
+const path = require("path");
+const fs = require("fs");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
 require("dotenv").config();
 // Gemini API and WebSockets enabled
 
@@ -23,7 +26,7 @@ const { processOrder, cancelOrder, getOrCreateUserFunds } = require("./services/
 const { analyzePortfolio } = require("./services/portfolioAnalystService");
 const { tickerService } = require("./services/tickerService");
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3002;
 const uri = process.env.MONGO_URL;
 
 const app = express();
@@ -32,7 +35,7 @@ const server = http.createServer(app);
 // 1. WebSocket Server (Socket.IO)
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:5173", "http://localhost:3000"],
+    origin: true,
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   },
@@ -89,7 +92,7 @@ const broadcastUserUpdates = async (userId) => {
 
 app.use(
   cors({
-    origin: ["http://localhost:5173", "http://localhost:3000"],
+    origin: true,
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
@@ -373,13 +376,60 @@ app.get("/api/quotes", async (req, res) => {
 });
 
 // ==========================================
-// 6. SERVER INITIALIZATION
+// 6. STATIC ASSET HOSTING & CATCH-ALL ROUTING
+// ==========================================
+const frontendDist = path.join(__dirname, "../frontend/dist");
+const frontendBuild = path.join(__dirname, "../frontend/build");
+const dashboardBuild = path.join(__dirname, "../dashboard/build");
+
+// 6a. Trading Terminal (Dashboard) build hosting if available
+if (fs.existsSync(dashboardBuild)) {
+  app.use("/dashboard", express.static(dashboardBuild));
+  app.use("/static", express.static(path.join(dashboardBuild, "static")));
+
+  // Dedicated client-side routes for the trading terminal
+  const dashboardRoutes = ["/dashboard", "/orders", "/holdings", "/positions", "/funds", "/apps"];
+  dashboardRoutes.forEach((route) => {
+    app.get(route, (req, res) => {
+      res.sendFile(path.join(dashboardBuild, "index.html"));
+    });
+  });
+  app.get(/^\/dashboard(?:\/.*)?$/, (req, res) => {
+    res.sendFile(path.join(dashboardBuild, "index.html"));
+  });
+}
+
+// 6b. Primary Frontend (Vite dist or CRA build)
+const staticFrontendDir = fs.existsSync(frontendDist)
+  ? frontendDist
+  : fs.existsSync(frontendBuild)
+  ? frontendBuild
+  : fs.existsSync(dashboardBuild)
+  ? dashboardBuild
+  : null;
+
+if (staticFrontendDir) {
+  app.use(express.static(staticFrontendDir));
+
+  // Catch-all route to support client-side routing (placed AFTER all API endpoints)
+  // Uses regex /(.*)/ compatible with Express 5 path-to-regexp
+  app.get(/(.*)/, (req, res) => {
+    res.sendFile(path.join(staticFrontendDir, "index.html"));
+  });
+}
+
+// ==========================================
+// 7. SERVER INITIALIZATION
 // ==========================================
 server.listen(PORT, () => {
   console.log(`Zerodha Backend running on port ${PORT} with WebSocket support!`);
   tickerService.start(io);
-  mongoose
-    .connect(uri)
-    .then(() => console.log("Connected to MongoDB Atlas!"))
-    .catch((err) => console.error("MongoDB Atlas connection error:", err));
+  if (uri) {
+    mongoose
+      .connect(uri)
+      .then(() => console.log("Connected to MongoDB Atlas!"))
+      .catch((err) => console.error("MongoDB Atlas connection error:", err));
+  } else {
+    console.warn("WARNING: MONGO_URL is not set in environment variables!");
+  }
 });

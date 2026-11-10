@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
+import { API_BASE } from "../config";
 import BuyActionWindow from "./BuyActionWindow";
 import StockAnalyticsModal from "./StockAnalyticsModal";
 import AIPortfolioAnalystModal from "./AIPortfolioAnalystModal";
@@ -68,10 +69,10 @@ export const GeneralContextProvider = (props) => {
     try {
       const config = getAuthHeaders();
       const [holdingsRes, positionsRes, ordersRes, fundsRes] = await Promise.all([
-        axios.get("http://localhost:3001/allHoldings", config),
-        axios.get("http://localhost:3001/allPositions", config),
-        axios.get("http://localhost:3001/allOrders", config),
-        axios.get("http://localhost:3001/api/funds", config),
+        axios.get(`${API_BASE}/allHoldings`, config),
+        axios.get(`${API_BASE}/allPositions`, config),
+        axios.get(`${API_BASE}/allOrders`, config),
+        axios.get(`${API_BASE}/api/funds`, config),
       ]);
 
       if (holdingsRes.data) setHoldings(holdingsRes.data);

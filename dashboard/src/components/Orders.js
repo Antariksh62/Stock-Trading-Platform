@@ -1,6 +1,7 @@
 import React, { useContext, useState } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
+import { API_BASE } from "../config";
 import GeneralContext from "./GeneralContext";
 
 const Orders = () => {
@@ -12,7 +13,7 @@ const Orders = () => {
     setCancellingId(orderId);
     setCancelMessage(null);
     try {
-      const res = await axios.post(`http://localhost:3001/cancelOrder/${orderId}`, {}, { withCredentials: true });
+      const res = await axios.post(`${API_BASE}/cancelOrder/${orderId}`, {}, { withCredentials: true });
       if (res.data && res.data.success) {
         setCancelMessage({ type: "success", text: res.data.message });
       } else {

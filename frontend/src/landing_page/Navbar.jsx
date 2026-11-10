@@ -34,6 +34,7 @@ function Navbar() {
                     <Link to="/productpage" className="text-gray-500 no-underline hover:text-blue-600 transition-colors focus:outline-none">Products</Link>
                     <Link to="/pricing" className="text-gray-500 no-underline transition-colors focus:outline-none">Pricing</Link>
                     <Link to="/supportpage" className="text-gray-500 no-underline hover:text-blue-600 transition-colors focus:outline-none">Support</Link>
+                    <a href="/dashboard" className="text-blue-600 font-semibold no-underline hover:text-blue-800 transition-colors focus:outline-none">Dashboard</a>
                     
                     {/* Hamburger icon beside support */}
                     <button className="text-gray-500 hover:text-gray-800 ml-4 focus:outline-none hidden lg:block">

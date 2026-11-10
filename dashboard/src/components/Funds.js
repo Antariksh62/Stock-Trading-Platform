@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useContext } from "react";
 import axios from "axios";
+import { API_BASE } from "../config";
 import GeneralContext from "./GeneralContext";
 
 const Funds = () => {
@@ -46,7 +47,7 @@ const Funds = () => {
 
     try {
       if (modalMode === "add") {
-        const res = await axios.post("http://localhost:3001/api/funds/add", { amount: val }, { withCredentials: true });
+        const res = await axios.post(`${API_BASE}/api/funds/add`, { amount: val }, { withCredentials: true });
         if (res.data && res.data.success) {
           setMessage(`Successfully added ₹${val.toLocaleString()} via UPI (${upiIdInput})`);
           setTimeout(() => {
@@ -59,7 +60,7 @@ const Funds = () => {
           setMessage(res.data?.message || "Failed to process UPI deposit");
         }
       } else if (modalMode === "withdraw") {
-        const res = await axios.post("http://localhost:3001/api/funds/withdraw", { amount: val }, { withCredentials: true });
+        const res = await axios.post(`${API_BASE}/api/funds/withdraw`, { amount: val }, { withCredentials: true });
         if (res.data && res.data.success) {
           setMessage(`Withdrawal request for ₹${val.toLocaleString()} initiated to linked bank account`);
           setTimeout(() => {

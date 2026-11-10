@@ -5,6 +5,7 @@ import GeneralContext from "./GeneralContext";
 import { DoughnutChart } from "./DoughnutChart";
 import { nifty50Stocks, nasdaq100Stocks } from "../data/stocksData";
 import axios from "axios";
+import { API_BASE } from "../config";
 
 const PAGE_SIZE = 10;
 
@@ -54,7 +55,7 @@ const WatchList = () => {
 
       try {
         setIsLiveUpdating(true);
-        const res = await axios.get(`http://localhost:3001/api/quotes?symbols=${symbols}`, {
+        const res = await axios.get(`${API_BASE}/api/quotes?symbols=${symbols}`, {
           timeout: 7000,
         });
 

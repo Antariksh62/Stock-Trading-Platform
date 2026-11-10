@@ -25,9 +25,16 @@ function SignUp() {
     setErrorMessage("");
     setSuccessMessage("");
 
+    const apiBase =
+      import.meta.env.VITE_API_URL !== undefined
+        ? import.meta.env.VITE_API_URL
+        : typeof window !== "undefined" && window.location.port === "5173"
+        ? "http://localhost:3001"
+        : "";
+
     const endpoint = isLogin
-      ? "http://localhost:3001/login"
-      : "http://localhost:3001/signup";
+      ? `${apiBase}/login`
+      : `${apiBase}/signup`;
 
     const payload = isLogin
       ? { email, password }
@@ -51,7 +58,13 @@ function SignUp() {
 
         setTimeout(() => {
           const userParam = encodeURIComponent(JSON.stringify(data.user || {}));
-          window.location.href = `http://localhost:3000/?token=${data.token || ""}&user=${userParam}`;
+          const dashboardBase =
+            import.meta.env.VITE_DASHBOARD_URL !== undefined
+              ? import.meta.env.VITE_DASHBOARD_URL
+              : typeof window !== "undefined" && window.location.port === "5173"
+              ? "http://localhost:3000"
+              : "/dashboard";
+          window.location.href = `${dashboardBase}/?token=${data.token || ""}&user=${userParam}`;
         }, 1200);
       }
     } catch (error) {

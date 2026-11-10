@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
+import { API_BASE, FRONTEND_URL } from "../config";
 
 const Menu = () => {
   const [selectedMenu, setSelectedMenu] = useState(0);
@@ -21,7 +22,7 @@ const Menu = () => {
 
     // 2. Verify with backend token
     axios
-      .post("http://localhost:3001/verify", {}, { withCredentials: true })
+      .post(`${API_BASE}/verify`, {}, { withCredentials: true })
       .then((res) => {
         if (res.data.status && res.data.user) {
           setUsername(res.data.user.toUpperCase());
@@ -53,7 +54,7 @@ const Menu = () => {
   const handleLogout = async () => {
     try {
       await axios.post(
-        "http://localhost:3001/logout",
+        `${API_BASE}/logout`,
         {},
         { withCredentials: true }
       );
@@ -62,7 +63,7 @@ const Menu = () => {
     }
     localStorage.removeItem("user");
     localStorage.removeItem("token");
-    window.location.href = "http://localhost:5173/signup";
+    window.location.href = FRONTEND_URL ? `${FRONTEND_URL}/signup` : "/signup";
   };
 
   const avatarText = username.slice(0, 2) || "ZU";

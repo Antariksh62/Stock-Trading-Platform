@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Menu from "./Menu";
 import axios from "axios";
+import { API_BASE } from "../config";
 import { socketService } from "../services/socketService";
 
 /**
@@ -97,7 +98,7 @@ const TopBar = () => {
 
     // 1. Initial HTTP fetch for instantaneous render
     axios
-      .get("http://localhost:3001/api/ticker", { timeout: 6000 })
+      .get(`${API_BASE}/api/ticker`, { timeout: 6000 })
       .then((res) => {
         if (isMounted && res.data) {
           handleTickerPayload(res.data);

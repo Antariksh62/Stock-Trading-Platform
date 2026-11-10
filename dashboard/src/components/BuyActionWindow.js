@@ -1,5 +1,6 @@
 import React, { useState, useContext, useEffect, useId } from "react";
 import axios from "axios";
+import { API_BASE } from "../config";
 import GeneralContext from "./GeneralContext";
 import { watchList } from "../data/data";
 import "./BuyActionWindow.css";
@@ -72,7 +73,7 @@ const BuyActionWindow = ({ uid, mode = "BUY", customPrice = null, initialProduct
 
     try {
       const response = await axios.post(
-        "http://localhost:3001/newOrder",
+        `${API_BASE}/newOrder`,
         {
           userId,
           name: uid,
