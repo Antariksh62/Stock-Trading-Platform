@@ -111,42 +111,43 @@ const WatchList = () => {
     }
   };
 
-  // Doughnut chart labels & values from current visible page
-  const chartLabels = visibleStocks.map((s) => s.name);
-  const chartData = {
-    labels: chartLabels,
-    datasets: [
-      {
-        label: "Price",
-        data: visibleStocks.map((s) => s.price),
-        backgroundColor: [
-          "rgba(255, 99, 132, 0.5)",
-          "rgba(54, 162, 235, 0.5)",
-          "rgba(255, 206, 86, 0.5)",
-          "rgba(75, 192, 192, 0.5)",
-          "rgba(153, 102, 255, 0.5)",
-          "rgba(255, 159, 64, 0.5)",
-          "rgba(65, 132, 243, 0.5)",
-          "rgba(76, 175, 80, 0.5)",
-          "rgba(255, 87, 34, 0.5)",
-          "rgba(156, 39, 176, 0.5)",
-        ],
-        borderColor: [
-          "rgba(255, 99, 132, 1)",
-          "rgba(54, 162, 235, 1)",
-          "rgba(255, 206, 86, 1)",
-          "rgba(75, 192, 192, 1)",
-          "rgba(153, 102, 255, 1)",
-          "rgba(255, 159, 64, 1)",
-          "rgba(65, 132, 243, 1)",
-          "rgba(76, 175, 80, 1)",
-          "rgba(255, 87, 34, 1)",
-          "rgba(156, 39, 176, 1)",
-        ],
-        borderWidth: 1,
-      },
-    ],
-  };
+  // Doughnut chart labels & values from current visible page (memoized to prevent re-calculations)
+  const chartData = useMemo(() => {
+    return {
+      labels: visibleStocks.map((s) => s.name),
+      datasets: [
+        {
+          label: "Price",
+          data: visibleStocks.map((s) => s.price),
+          backgroundColor: [
+            "rgba(255, 99, 132, 0.5)",
+            "rgba(54, 162, 235, 0.5)",
+            "rgba(255, 206, 86, 0.5)",
+            "rgba(75, 192, 192, 0.5)",
+            "rgba(153, 102, 255, 0.5)",
+            "rgba(255, 159, 64, 0.5)",
+            "rgba(65, 132, 243, 0.5)",
+            "rgba(76, 175, 80, 0.5)",
+            "rgba(255, 87, 34, 0.5)",
+            "rgba(156, 39, 176, 0.5)",
+          ],
+          borderColor: [
+            "rgba(255, 99, 132, 1)",
+            "rgba(54, 162, 235, 1)",
+            "rgba(255, 206, 86, 1)",
+            "rgba(75, 192, 192, 1)",
+            "rgba(153, 102, 255, 1)",
+            "rgba(255, 159, 64, 1)",
+            "rgba(65, 132, 243, 1)",
+            "rgba(76, 175, 80, 1)",
+            "rgba(255, 87, 34, 1)",
+            "rgba(156, 39, 176, 1)",
+          ],
+          borderWidth: 1,
+        },
+      ],
+    };
+  }, [visibleStocks]);
 
   return (
     <div className="watchlist-container" ref={listTopRef}>
@@ -327,7 +328,7 @@ const WatchList = () => {
       </div>
 
       {/* 6. Doughnut Chart for Page Holdings */}
-      <div style={{ padding: "16px 10px 40px 10px" }}>
+      <div style={{ padding: "16px 10px 40px 10px", minHeight: "270px" }}>
         <DoughnutChart data={chartData} />
       </div>
     </div>
