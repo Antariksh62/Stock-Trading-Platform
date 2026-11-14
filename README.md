@@ -345,12 +345,18 @@ Add the following environment variable template to `backend/.env`:
 ```env
 # Server Port Configuration
 PORT=3001
+NODE_ENV=development
 
 # MongoDB Connection String (Atlas URI or local instance)
 MONGO_URL=mongodb+srv://<USERNAME>:<PASSWORD>@<CLUSTER-URL>/<DATABASE-NAME>?retryWrites=true&w=majority
 
 # JWT Token Secret for Auth Signatures
 TOKEN_KEY=your_secure_jwt_secret_key_here
+
+# Allowed CORS Origins (comma-separated for multi-environment deployments)
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+FRONTEND_URL=http://localhost:5173
+DASHBOARD_URL=http://localhost:3000
 
 # External Market Data API Key (Twelve Data - Free Tier: 8 credits/min)
 # Optional: If omitted or rate-limited, the backend automatically uses cached/fallback data.
@@ -749,18 +755,34 @@ The platform includes a collection of visual brand assets and UI illustrations s
 
 ### Automated Test Suites
 
-The repository contains two automated test suites in the `backend/tests/` directory:
+The repository contains four automated test suites in the `backend/tests/` directory:
 
-1. **Enhancements Test Suite (`backend/tests/enhancements.test.js`)**:
+1. **Limit Orders & Order Matching Test Suite (`backend/tests/limit_orders_and_matching.test.js`)**:
+   - 14 automated verification scenarios testing server-authoritative execution prices, Ask/Bid standard limit matching, price improvement refunds, share reservation (`lockedQty`), order cancellation, and concurrency race serialization.
+   - **How to Run**:
+     ```bash
+     cd backend
+     node tests/limit_orders_and_matching.test.js
+     ```
+
+2. **Backend Reliability, Security & MIS Audit Suite (`backend/tests/backend_reliability_audit.test.js`)**:
+   - 24 automated scenarios testing strict JWT route protection (401 on missing/tampered token), Socket.IO handshake authentication & room isolation, full 10-state MIS intraday accounting (open, increase, reduce, close, reversals with realized P&L), share oversell prevention, atomic concurrent funds withdrawals, and user-scoped idempotency.
+   - **How to Run**:
+     ```bash
+     cd backend
+     node tests/backend_reliability_audit.test.js
+     ```
+
+3. **Enhancements Test Suite (`backend/tests/enhancements.test.js`)**:
    - Tests order validation, insufficient funds rejection, CNC sell limits, limit order placement, limit order cancellation, per-user mutex concurrency serialization, Socket.IO updates, and Gemini AI portfolio analysis.
    - **How to Run**:
      ```bash
-     # Ensure the backend server is running on port 3001, then in a new terminal:
+     # Ensure the backend server is running on port 3002, then in a new terminal:
      cd backend
      node tests/enhancements.test.js
      ```
 
-2. **Comprehensive End-to-End QA Audit (`backend/tests/qa_e2e_full_audit.test.js`)**:
+4. **Comprehensive End-to-End QA Audit (`backend/tests/qa_e2e_full_audit.test.js`)**:
    - Simulates multi-user onboarding (User Alpha & User Beta), session isolation, cross-user authorization barriers, rapid concurrent order placement, and end-to-end P&L math.
    - **How to Run**:
      ```bash

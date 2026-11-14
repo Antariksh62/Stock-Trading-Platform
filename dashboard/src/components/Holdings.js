@@ -94,7 +94,14 @@ const Holdings = () => {
                 return (
                   <tr key={stock._id || index}>
                     <td style={{ fontWeight: "500" }}>{stock.name}</td>
-                    <td>{qty}</td>
+                    <td>
+                      <span>{qty}</span>
+                      {stock.lockedQty > 0 && (
+                        <span style={{ fontSize: "0.68rem", color: "#e65100", display: "block" }} title={`${stock.lockedQty} shares reserved in pending limit orders`}>
+                          ({stock.lockedQty} locked)
+                        </span>
+                      )}
+                    </td>
                     <td>{avg.toFixed(2)}</td>
                     <td>{price.toFixed(2)}</td>
                     <td>{currValue.toFixed(2)}</td>
@@ -106,7 +113,10 @@ const Holdings = () => {
                     <td className={dayClass}>{stock.day || "+0.00%"}</td>
                     <td>
                       <button
-                        onClick={() => openBuyWindow && openBuyWindow(stock.name, "SELL", price, "CNC", qty)}
+                        onClick={() => {
+                          const availableQty = Math.max(1, qty - (stock.lockedQty || 0));
+                          if (openBuyWindow) openBuyWindow(stock.name, "SELL", price, "CNC", availableQty);
+                        }}
                         style={{
                           padding: "3px 10px",
                           fontSize: "0.72rem",

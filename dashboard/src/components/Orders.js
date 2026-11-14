@@ -136,7 +136,14 @@ const Orders = () => {
                     </span>
                   </td>
                   <td>{order.qty}</td>
-                  <td>₹{Number(order.price).toFixed(2)}</td>
+                  <td>
+                    <div>₹{Number(order.executionPrice || order.price).toFixed(2)}</div>
+                    {order.orderType === "LIMIT" && order.limitPrice && (
+                      <div style={{ fontSize: "0.68rem", color: "#888" }}>
+                        Limit: ₹{Number(order.limitPrice).toFixed(2)}
+                      </div>
+                    )}
+                  </td>
                   <td>
                     <span
                       title={order.rejectionReason || ""}

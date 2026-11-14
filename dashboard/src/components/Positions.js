@@ -71,7 +71,14 @@ const Positions = () => {
                       </span>
                     </td>
                     <td style={{ fontWeight: "500" }}>{stock.name}</td>
-                    <td>{qty}</td>
+                    <td>
+                      <span>{qty}</span>
+                      {stock.lockedQty > 0 && (
+                        <span style={{ fontSize: "0.68rem", color: "#e65100", display: "block" }}>
+                          ({stock.lockedQty} locked)
+                        </span>
+                      )}
+                    </td>
                     <td>{avg.toFixed(2)}</td>
                     <td>{price.toFixed(2)}</td>
                     <td className={profClass} style={{ fontWeight: "600" }}>

@@ -1,4 +1,5 @@
 const axios = require("axios");
+const { stockPriceMap } = require("../data/stocksData");
 
 /**
  * Resilient Market Ticker Service
@@ -9,13 +10,15 @@ const axios = require("axios");
  * 3. Graceful degradation: If Twelve Data hits 429 rate limit or symbol restrictions,
  *    seamlessly falls back to secondary public exchange feed (^NSEI, ^BSESN, QQQ).
  * 4. Socket.IO broadcast: Pushes updates to all active clients reactively.
+ * 5. Limit Order Matching Hooks: Integrates with orderExecutionService to match pending orders on price ticks.
  */
 
 class TickerService {
   constructor() {
-    this.apiKey = process.env.TWELVE_DATA_API_KEY || "e3a7567d8f13431faf3c7e751e797817";
+    this.apiKey = process.env.TWELVE_DATA_API_KEY || null;
     this.pollIntervalMs = 20000; // 20s = 3 requests per minute
     this.timer = null;
+    this.matchingTimer = null;
     this.io = null;
 
     // In-memory cache holding latest validated quotes
@@ -32,6 +35,92 @@ class TickerService {
     // Symbol-level quotes cache for Watchlist pagination
     this.quotesCache = {};
     this.dailyQuotaExhausted = true; // Twelve Data 800 daily credits exceeded for today (2,301 used)
+
+    // Callback handlers for order matching engine
+    this.matchingHandler = null; // async (symbol, newPrice) => ...
+    this.periodicMatchingHandler = null; // async () => ...
+  }
+
+  /**
+   * Set callbacks for order matching
+   */
+  setMatchingHandlers({ onStockPriceUpdate = null, onPeriodicCheck = null } = {}) {
+    this.matchingHandler = onStockPriceUpdate;
+    this.periodicMatchingHandler = onPeriodicCheck;
+  }
+
+  /**
+   * Get the trusted market price of a stock (LTP).
+   * Hierarchy:
+   * 1. Live quotes cache (if fresh)
+   * 2. Authoritative baseline stock price map (Nifty 50 / Nasdaq 100)
+   * 3. Fallback price parameter (if valid > 0)
+   * 4. Default 100.00
+   */
+  getMarketPrice(rawSymbol, fallbackPrice = null) {
+    if (!rawSymbol) return fallbackPrice || 100.0;
+    const sym = String(rawSymbol).trim().toUpperCase();
+
+    if (this.quotesCache[sym] && this.quotesCache[sym].data && typeof this.quotesCache[sym].data.price === "number") {
+      return Number(this.quotesCache[sym].data.price.toFixed(2));
+    }
+    if (stockPriceMap[sym] !== undefined) {
+      return Number(stockPriceMap[sym].toFixed(2));
+    }
+    const numFallback = Number(fallbackPrice);
+    if (!isNaN(numFallback) && numFallback > 0) {
+      return Number(numFallback.toFixed(2));
+    }
+    return 100.0;
+  }
+
+  /**
+   * Get market quote with Ask and Bid prices.
+   * Documented approximation: In this single-quote broker simulation without a full
+   * multi-broker L2/L3 order book, the available ask and bid liquidity prices are
+   * referenced against the Last Traded Price (LTP).
+   */
+  getMarketQuotes(rawSymbol, fallbackPrice = null) {
+    const ltp = this.getMarketPrice(rawSymbol, fallbackPrice);
+    return {
+      symbol: String(rawSymbol).toUpperCase(),
+      price: ltp,
+      ask: ltp,
+      bid: ltp,
+    };
+  }
+
+  /**
+   * Update or simulate a stock price quote in the cache and trigger pending order matching.
+   */
+  async updateQuote(rawSymbol, newPrice) {
+    const sym = String(rawSymbol).trim().toUpperCase();
+    const price = Number(Number(newPrice).toFixed(2));
+    if (isNaN(price) || price <= 0) return null;
+
+    const prevPrice = this.getMarketPrice(sym);
+    const diff = price - prevPrice;
+    const pct = prevPrice > 0 ? (diff / prevPrice) * 100 : 0;
+
+    const quoteData = {
+      price,
+      percent: (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%",
+      isDown: pct < 0,
+      prevClose: prevPrice,
+    };
+
+    this.quotesCache[sym] = { timestamp: Date.now(), data: quoteData };
+
+    // Trigger order matching engine for this stock
+    if (this.matchingHandler) {
+      try {
+        await this.matchingHandler(sym, price);
+      } catch (err) {
+        console.warn(`[TickerService] Error running matching handler for ${sym}:`, err.message);
+      }
+    }
+
+    return quoteData;
   }
 
   /**
@@ -44,11 +133,24 @@ class TickerService {
     // Immediately fetch initial quote
     this.fetchAndUpdate();
 
-    // Start interval loop
+    // Start interval loop for market indices
     if (!this.timer) {
       this.timer = setInterval(() => {
         this.fetchAndUpdate();
       }, this.pollIntervalMs);
+    }
+
+    // Start periodic pending order matching sweep (every 10 seconds)
+    if (!this.matchingTimer) {
+      this.matchingTimer = setInterval(async () => {
+        if (this.periodicMatchingHandler) {
+          try {
+            await this.periodicMatchingHandler();
+          } catch (e) {
+            console.warn("[TickerService] Periodic matching sweep error:", e.message);
+          }
+        }
+      }, 10000);
     }
   }
 
@@ -56,6 +158,10 @@ class TickerService {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
+    }
+    if (this.matchingTimer) {
+      clearInterval(this.matchingTimer);
+      this.matchingTimer = null;
     }
   }
 
@@ -127,7 +233,6 @@ class TickerService {
       }
     } catch (err) {
       // Twelve data rate-limited (HTTP 429) or symbol unavailable -> graceful fallback
-      // console.warn("[TickerService] Twelve Data batch notice:", err.response?.data?.message || err.message);
     }
 
     // 2. Resilient Exchange Fallback if Twelve Data was rate-limited or missing Indian index data
@@ -224,14 +329,13 @@ class TickerService {
         const response = await axios.get(tdUrl, { timeout: 7000 });
 
         if (response.data) {
-          // Check for rate limit response code or status
           if (
             response.data.code === 429 ||
             response.data.status === "error" ||
             response.data.message?.toLowerCase().includes("limit")
           ) {
             rateLimitExhausted = true;
-            message = response.data.message || "Twelve Data API call limit (8 credits/min) reached. Showing cached/simulated quotes.";
+            message = response.data.message || "Twelve Data API call limit reached. Showing baseline quotes.";
           } else {
             const dataObj = response.data;
             for (const sym of missingSymbols) {
@@ -247,6 +351,11 @@ class TickerService {
                 };
                 this.quotesCache[sym] = { timestamp: now, data: quoteData };
                 resultQuotes[sym] = quoteData;
+
+                // Trigger limit order matching on fresh price update
+                if (this.matchingHandler) {
+                  this.matchingHandler(sym, quoteData.price).catch(() => {});
+                }
               }
             }
           }
@@ -254,8 +363,24 @@ class TickerService {
       } catch (err) {
         if (err.response?.status === 429 || err.message?.includes("429")) {
           rateLimitExhausted = true;
-          message = "Twelve Data rate limit (8 credits/min) exhausted. Serving cached prices.";
+          message = "Twelve Data rate limit (8 credits/min) exhausted. Serving baseline prices.";
         }
+      }
+    }
+
+    // 3. Fallback for any symbols still missing: populate from authoritative stockPriceMap
+    for (const rawSym of symbolsArray) {
+      const sym = String(rawSym).trim().toUpperCase();
+      if (!resultQuotes[sym]) {
+        const basePrice = stockPriceMap[sym] || 100.0;
+        const baselineQuote = {
+          price: basePrice,
+          percent: "+0.00%",
+          isDown: false,
+          prevClose: basePrice,
+        };
+        resultQuotes[sym] = baselineQuote;
+        this.quotesCache[sym] = { timestamp: now, data: baselineQuote };
       }
     }
 
