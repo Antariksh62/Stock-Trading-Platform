@@ -1,6 +1,6 @@
 # Zerodha Trading Platform
 
-An end-to-end, full-stack paper-trading ecosystem inspired by **Zerodha Kite**, featuring a marketing website, an interactive trading dashboard, and a server-authoritative backend API with real-time WebSockets, automated risk controls, and an AI-powered portfolio analyst.
+An end-to-end, full-stack paper-trading ecosystem inspired by **Zerodha Kite**, featuring a marketing website, an interactive trading dashboard, and a server-authoritative backend API with real-time WebSockets, automated risk controls, an AI-powered portfolio analyst, and a production-grade **Razorpay payment gateway** with dual-path wallet crediting and ACID ledger auditing.
 
 ---
 
@@ -66,7 +66,7 @@ The **Zerodha Trading Platform** is structured as a decoupled multi-app architec
 
 1. **Marketing & Auth Portal (`/frontend`)**: A client-facing web application built with React 19, Vite, and Bootstrap, featuring product showcases, pricing tables, educational resources, and customer onboarding.
 2. **Trading Dashboard (`/dashboard`)**: A web trading terminal built with React 18, React Router, Material UI icons, and Chart.js, recreating Zerodha Kite's single-page interface with dual-market watchlists, interactive technical charts, Level 2 market depth, order placement windows, holdings, positions, and fund management.
-3. **Backend Service (`/backend`)**: A Node.js and Express REST API and Socket.IO WebSocket server backed by MongoDB Atlas, enforcing server-authoritative order validation, margin accounting, race-condition serialization, live market data caching, and AI-driven portfolio insights.
+3. **Backend Service (`/backend`)**: A Node.js and Express REST API and Socket.IO WebSocket server backed by MongoDB Atlas, enforcing server-authoritative order validation, margin accounting, race-condition serialization, live market data caching, an AI-driven portfolio analyst, and a production-grade **Razorpay payment gateway** with dual-path wallet crediting, enterprise webhook observability, and automated reconciliation.
 
 ---
 
