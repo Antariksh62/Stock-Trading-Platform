@@ -18,6 +18,7 @@ An end-to-end, full-stack paper-trading ecosystem inspired by **Zerodha Kite**, 
   - [Real-Time WebSocket Pipeline](#3-real-time-websocket-pipeline)
   - [AI Portfolio Analyst (Gemini)](#4-ai-portfolio-analyst-gemini)
   - [Marketing Website](#5-marketing-website)
+  - [Razorpay Payment Gateway & Wallet Engine](#6-razorpay-payment-gateway--wallet-engine-test-mode)
 - [System Architecture](#system-architecture)
 - [Technology Stack](#technology-stack)
 - [Repository Structure](#repository-structure)
@@ -44,10 +45,10 @@ An end-to-end, full-stack paper-trading ecosystem inspired by **Zerodha Kite**, 
   - [Payment Lifecycle Flow](#razorpay-payment-lifecycle-flow)
   - [State Machine Transitions](#razorpay-state-machine-transitions)
   - [API Endpoints Reference](#razorpay-api-endpoints-reference)
-  - [Webhook Event Processing](#razorpay-webhook-event-processing)
+  - [Webhook Event Processing & Observability](#razorpay-webhook-event-processing--observability)
   - [Wallet Crediting & Ledger Consistency](#razorpay-wallet-crediting--ledger-consistency)
   - [Automated Reconciliation Service](#razorpay-automated-reconciliation-service)
-  - [Safe Refund Handling](#razorpay-safe-refund-handling)
+  - [Safe Refund Handling & Concurrency Invariants](#razorpay-safe-refund-handling--concurrency-invariants)
   - [Environment Setup & Webhook Configuration](#razorpay-environment-setup--webhook-configuration)
   - [Render Cloud Deployment Guide](#razorpay-render-cloud-deployment-guide)
 - [Screenshots & UI Showcase](#screenshots--ui-showcase)
@@ -123,6 +124,15 @@ The **Zerodha Trading Platform** is structured as a decoupled multi-app architec
   - **About (`/aboutpage`)**: Company background and executive leadership team.
   - **Support (`/supportpage`)**: Knowledgebase search, ticket topics, and customer service portal.
   - **Signup (`/signup`)**: Onboarding form with live validation and automatic redirect into the trading dashboard.
+
+### 6. Razorpay Payment Gateway & Wallet Engine (Test Mode)
+- **Production-Grade Test Mode Simulation**: Educational paper-trading powered by Razorpay Test API keys (`rzp_test_...`) with startup configuration guards that immediately reject live credentials (`rzp_live_...`).
+- **Dual-Path Wallet Crediting**: Synchronous checkout verification with timing-safe HMAC-SHA256 signatures plus asynchronous webhook event processing with idempotent convergence.
+- **Enterprise Webhook Observability**: Dual visibility pipeline featuring structured JSON operational logging for Render Application Logs (`[RazorpayWebhook]`) alongside persistent MongoDB event audit records (`WebhookEventModel`).
+- **ACID Ledger Consistency**: Multi-document MongoDB sessions with automatic transient write conflict retries (up to 5 attempts), user-scoped mutex locking, and atomic balance updates (`availableCash`, `availableMargin`, `payin`).
+- **Safe Refund Management**: Controlled partial and full refunds with margin deficit avoidance, SDK v2.9.8 `fetchMultipleRefund` reconciliation, and atomic non-negative `payin` floor clamping.
+- **Automated Background Reconciliation**: Periodic singleton scheduler running with atomic document leases (`reconciliationLockedUntil`) to auto-recover stale, interrupted, or out-of-order gateway transactions.
+- **Deployment Health Monitoring**: Dedicated `/health` and `/api/health` probes returning service readiness for MongoDB, Razorpay Test Mode, and Socket.IO.
 
 ---
 
@@ -840,54 +850,75 @@ All payment endpoints are mounted under `/api/payments` and enforce strict JWT a
 
 ---
 
-### Razorpay Webhook Event Processing
+### Razorpay Webhook Event Processing & Observability
 
-The webhook receiver at `POST /api/webhooks/razorpay`:
-1. Preserves the unmodified raw request body (`Buffer`) before JSON parsing for cryptographic HMAC-SHA256 signature verification.
-2. Checks for duplicate events using the unique index on `WebhookEventModel.razorpayEventId`.
-3. Handles all primary Razorpay events:
-   - `payment.authorized`: Updates `CREATED` payments to `PENDING` (never downgrades `CAPTURED` or `CREDITED`).
-   - `payment.captured`: Confirms capture and calls `processCapturedPayment()` to credit wallet.
-   - `payment.failed`: Records error description and sets status to `FAILED`.
+The webhook receiver at `POST /api/webhooks/razorpay` delivers enterprise-grade observability and cryptographic security:
+
+1. **Pristine Raw Request Body Buffer**:
+   - Preserves the unmodified raw request body (`Buffer`) via `express.raw({ type: "*/*" })` mounted strictly **before** standard `bodyParser.json()`.
+   - Generates exact byte-level HMAC-SHA256 signatures (`x-razorpay-signature`) using `crypto.timingSafeEqual` to eliminate timing attack vectors.
+
+2. **Dual-Layer Observability System**:
+   - **Render Application Logs (Real-Time)**: Emits structured JSON log lines prefixed with `[RazorpayWebhook]` to provide immediate operational visibility in the Render dashboard:
+     ```json
+     [RazorpayWebhook] {"timestamp":"2026-11-15T10:45:27.114Z","level":"info","stage":"incoming_request","eventId":"evt_12345","message":"Incoming Razorpay webhook HTTP request received."}
+     ```
+   - **MongoDB Persistent Audit (`WebhookEventModel`)**: Every event is captured with raw payload, computed signature validity, processing state (`RECEIVED`, `PROCESSING`, `PROCESSED`, `FAILED`), timestamps, retry counts, and failure diagnostics.
+   - **Monitored Lifecycle Stages**: `incoming_request`, `signature_verification`, `payload_parsed`, `event_persistence`, `payment_processing`, `payment_status_update`, `wallet_crediting`, `refund_received`, `refund_correlation`, `refund_status_update`, `refund_duplicate`, `duplicate_detection`, `event_completed`, and `event_error`.
+
+3. **Replay & Duplicate Protection**:
+   - Backed by a MongoDB unique compound index on `WebhookEventModel.razorpayEventId`.
+   - Duplicate event deliveries are acknowledged with `HTTP 200 { "duplicate": true }` within <100ms, preventing redundant processing loops while adhering to Razorpay delivery contracts.
+
+4. **Handled Webhook Event Types**:
+   - `payment.authorized`: Updates `CREATED` payments to `PENDING` (strictly never downgrades `CAPTURED` or `CREDITED` payments).
+   - `payment.captured`: Confirms capture and calls `processCapturedPayment()` for ACID wallet crediting.
+   - `payment.failed`: Records error description and transitions status to `FAILED`.
    - `order.paid`: Confirms order capture and triggers wallet crediting.
-   - `refund.processed`: Records refund execution and updates `amountRefunded`.
+   - `refund.processed`: Correlates refund with internal payment record, updates `amountRefunded`, and transitions status to `FULL` or `PARTIAL`.
    - `refund.failed`: Backs out uncompleted refund amount and logs failure reason.
-4. Returns HTTP 200 within <200ms to meet Razorpay webhook timeout thresholds.
 
 ---
 
 ### Razorpay Wallet Crediting & Ledger Consistency
 
 All wallet balance updates are governed by `backend/services/paymentProcessingService.js`:
-- **Serialized User Locking**: Uses an async per-user mutex (`acquireUserLock(userId)`) to prevent write conflicts and race conditions.
-- **ACID MongoDB Transactions**: Executed within a Mongoose multi-document transaction with automated exponential backoff retries.
-- **Atomic Balance Increments**: Simultaneously increments `availableCash`, `availableMargin`, and `payin` on `FundsModel`.
-- **Immutable Ledger Entry**: Writes a permanent record into `WalletTransactionModel` recording `balanceBefore`, `balanceAfter`, integer `amountPaise`, and rupee `amountRupees`.
-- **Real-Time Notification**: Emits `funds_update` via Socket.IO strictly *post-commit*, guaranteeing zero phantom notifications.
+- **Serialized User Locking**: Uses an async per-user mutex (`acquireUserLock(userId)`) to serialize order processing and balance mutations, eliminating race conditions across rapid concurrent requests.
+- **ACID MongoDB Transactions**: Executed within a Mongoose multi-document transaction (`session.startTransaction()`) with an automated exponential backoff retry loop (up to 5 attempts) to absorb `TransientTransactionError` and write conflicts.
+- **Atomic Balance Increments**: Simultaneously increments `availableCash`, `availableMargin`, and `payin` on `FundsModel` in a single atomic database operation.
+- **Conditional State Machine**: Uses atomic query filter `{ _id: payment._id, status: "CAPTURED" }` during credit transition, ensuring that simultaneous checkout verification and webhook delivery can never double-credit the user's wallet.
+- **Immutable Ledger Entry**: Writes a permanent dual-entry record into `WalletTransactionModel` recording `balanceBefore`, `balanceAfter`, integer `amountPaise`, rupee `amountRupees`, status `COMPLETED`, and Razorpay order/payment linkage.
+- **Real-Time Notification**: Emits `funds_update` via Socket.IO strictly *post-commit*, guaranteeing zero phantom notifications on transaction rollbacks.
 
 ---
 
 ### Razorpay Automated Reconciliation Service
 
 Located in `backend/services/paymentReconciliationService.js`:
-- Automatically runs in the background on a 5-minute interval.
+- Automatically runs in the background on a configurable interval (default: 5 minutes) started during server boot and gracefully terminated on `SIGINT`/`SIGTERM`.
 - Identifies candidate payments in `CREATED`, `PENDING`, or uncredited `CAPTURED` states older than 10 minutes.
 - Employs **Atomic Document Leases** (`findOneAndUpdate` with `reconciliationLockedUntil: { $lte: now }`) to prevent horizontal multi-instance workers from racing on the same payment.
 - Queries `razorpay.orders.fetchPayments(orderId)` authoritatively.
-- Validates amount, currency (`INR`), and ownership. Flags discrepancies (`FLAGGED_AMOUNT_MISMATCH`, `FLAGGED_CURRENCY_MISMATCH`) without crediting the wallet.
-- If authoritative status is `captured`, safely invokes `processCapturedPayment()`.
+- Validates amount, currency (`INR`), and ownership. Discrepancies are flagged (`FLAGGED_AMOUNT_MISMATCH`, `FLAGGED_CURRENCY_MISMATCH`) without crediting the wallet.
+- If authoritative status is `captured`, safely delegates to `processCapturedPayment()`.
 - Single-process mutex (`isReconciliationRunning`) prevents overlapping interval executions.
 
 ---
 
-### Razorpay Safe Refund Handling
+### Razorpay Safe Refund Handling & Concurrency Invariants
 
 Located in `backend/services/paymentRefundService.js`:
-- **Strict Authorization**: Only the owner of a payment can initiate a refund; cross-user refunds return `HTTP 403 Forbidden`.
-- **Status Verification**: Only `CAPTURED` or `CREDITED` payments can be refunded.
-- **Partial & Full Refunds**: Supports refunds up to the remaining unrefunded balance.
+- **Strict Authorization**: Only the owner of a payment can initiate a refund; cross-user attempts return `HTTP 403 Forbidden`.
+- **Status Verification**: Only `CAPTURED` or `CREDITED` payments can be refunded; uncaptured orders are rejected with `HTTP 400`.
+- **Partial & Full Refunds**: Supports refunds up to the remaining unrefunded balance; attempts exceeding this balance are rejected.
 - **Margin Deficit Prevention**: If `deductFromWallet: true` is requested on a `CREDITED` payment, the system verifies `availableMargin >= refundAmountRupees`. If available margin is insufficient (e.g. funds are tied up in stock positions), the gateway refund proceeds, but the wallet deduction is safely skipped (`walletDeductionStatus: "INSUFFICIENT_FUNDS"`) to prevent negative margin.
-- **Ledger Immutability**: Historical deposit records are never modified; a distinct `type: "REFUND"` ledger transaction is created.
+- **Atomic Payin Floor Protection**: Inside the transaction, payin deductions are calculated using the live database value and clamped so that `payin` is strictly bounded at ₹0. Concurrent refunds can never drive `payin` negative.
+- **Supported SDK Method**: Uses the official Razorpay SDK v2.9.8 method `client.payments.fetchMultipleRefund(paymentId, params)` with pagination and notes correlation (`notes.internalRefundId`) rather than unsupported endpoints.
+- **Gateway Outcome Differentiation (Timeout vs Rejection)**:
+  - **Definite Gateway Rejection (HTTP 400)**: Immediately rolls back the wallet debit and updates the refund status to `FAILED`.
+  - **Gateway Network Timeout / Error (HTTP 504, ECONNRESET)**: Treats the outcome as uncertain (`isGatewayUncertain: true`), retains the wallet deduction safely, leaves the refund in `PENDING`, and queues it for the automated background reconciliation worker.
+  - **Max Attempts Guard**: If reconciliation cannot confirm a refund after 10 attempts, the record transitions to `FLAGGED` for administrative review without issuing a duplicate refund.
+- **Ledger Immutability**: Historical deposit records are never modified; a distinct `type: "REFUND"` ledger transaction is created with negative delta tracking.
 
 ---
 
@@ -966,22 +997,25 @@ The platform includes a collection of visual brand assets and UI illustrations s
 
 ## Testing & Quality Assurance
 
-### Razorpay Payment Integration Test Suites (483 / 483 Tests Passing)
+### Razorpay Payment Integration Test Suites (608 / 608 Tests Passing)
 
-The repository contains 10 dedicated payment test suites in `backend/tests/` running against live MongoDB Atlas test collections with zero real-money exposure:
+The repository contains 11 dedicated payment test suites in `backend/tests/` running against live MongoDB Atlas test collections with zero real-money exposure:
 
 | Test Suite | Command | Tests | Focus Area |
 | :--- | :--- | :---: | :--- |
 | **Order Creation** | `node backend/tests/test_payment_order_creation.test.js` | 40 | Limits (₹100–₹1,00,000), integer paise math, idempotency |
 | **Verification** | `node backend/tests/test_payment_verification.test.js` | 46 | HMAC-SHA256 timingSafeEqual, user ownership, gateway fetch |
 | **Webhooks** | `node backend/tests/test_razorpay_webhooks.test.js` | 48 | Raw body signature, event deduplication, retry recovery worker |
+| **Webhook Observability** | `node backend/tests/test_webhook_observability.test.js` | 40 | Render JSON logging, MongoDB event audit trail, error tracing |
 | **Wallet Crediting** | `node backend/tests/test_payment_wallet_crediting.test.js` | 45 | ACID MongoDB transactions, immutable ledger, Socket.IO updates |
 | **Frontend Checkout** | `node backend/tests/test_frontend_razorpay_checkout.test.js` | 37 | Modal flow, double-click lock, script failure recovery |
 | **Transaction History**| `node backend/tests/test_wallet_transaction_history.test.js` | 64 | Ledger pagination, sorting, ownership isolation, filtering |
 | **Failure & Recovery** | `node backend/tests/test_payment_failure_and_recovery.test.js` | 34 | Out-of-order webhooks, status polling, terminal immutability |
 | **Reconciliation** | `node backend/tests/test_payment_reconciliation.test.js` | 43 | Stale payment polling, atomic lease locks, scheduler lifecycle |
-| **Refunds** | `node backend/tests/test_payment_refunds.test.js` | 66 | Partial/full refunds, deficit avoidance, refund webhooks |
+| **Refunds** | `node backend/tests/test_payment_refunds.test.js` | 151 | Partial/full refunds, deficit avoidance, SDK v2.9.8, payin floor |
 | **Master Lifecycle** | `node backend/tests/test_payment_lifecycle_master.test.js` | 60 | Complete end-to-end lifecycle, stock trades, UPI compatibility |
+
+Combined with the 38 core trading tests, the project achieves **646 / 646 passing automated tests** with 100% pass rate.
 
 To run the complete master end-to-end lifecycle QA pass:
 ```bash
@@ -1068,6 +1102,11 @@ npm run build
 - [x] Level 2 market depth order book and multi-timeframe technical charts (SMA, EMA, Volume).
 - [x] Complete order execution engine with MARKET / LIMIT and CNC / MIS product types.
 - [x] Server-authoritative virtual funds management with UPI deposit and withdrawal simulation.
+- [x] Razorpay Payment Gateway integration (Test Mode) with synchronized checkout modal & verified wallet crediting.
+- [x] Enterprise webhook observability system with dual Render JSON logs & persistent MongoDB audit collection.
+- [x] Multi-document ACID transaction processing with automated retry on transient write conflicts.
+- [x] Automated background reconciliation scheduler for stale payments and pending refunds with atomic document leases.
+- [x] Controlled partial & full refund management with margin deficit avoidance & non-negative payin clamping.
 - [x] Real-time bi-directional WebSocket state distribution via Socket.IO.
 - [x] Gemini 2.5 Flash AI Portfolio Analyst with deterministic rule fallback.
 - [x] Multi-page responsive marketing website with user registration and login.
