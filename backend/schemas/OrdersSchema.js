@@ -29,6 +29,10 @@ const OrdersSchema = new Schema({
     type: Number,
     default: null,
   },
+  executionPrice: {
+    type: Number,
+    default: null,
+  },
   product: {
     type: String,
     enum: ["CNC", "MIS"],
@@ -41,7 +45,7 @@ const OrdersSchema = new Schema({
   },
   status: {
     type: String,
-    enum: ["PENDING", "FILLED", "CANCELLED", "REJECTED"],
+    enum: ["PENDING", "EXECUTING", "FILLED", "CANCELLED", "REJECTED"],
     default: "FILLED",
     index: true,
   },
@@ -63,5 +67,11 @@ const OrdersSchema = new Schema({
     default: Date.now,
   },
 });
+
+// Scope idempotency key to user ID with sparse unique index
+OrdersSchema.index(
+  { userId: 1, idempotencyKey: 1 },
+  { unique: true, sparse: true }
+);
 
 module.exports = { OrdersSchema };

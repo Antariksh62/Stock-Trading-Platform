@@ -26,13 +26,13 @@ const BuyActionWindow = ({ uid, mode = "BUY", customPrice = null, initialProduct
   );
 
   const [stockQuantity, setStockQuantity] = useState(defaultQty);
-  const [stockPrice, setStockPrice] = useState(basePrice);
+  const [stockPrice, setStockPrice] = useState(basePrice); // Current market price (LTP)
   const [orderType, setOrderType] = useState("MARKET"); // "MARKET" | "LIMIT"
   const [product, setProduct] = useState(defaultProduct); // "CNC" | "MIS"
-  const [limitPrice, setLimitPrice] = useState(basePrice);
+  const [limitPrice, setLimitPrice] = useState(basePrice); // User-specified limit price
 
   const [loading, setLoading] = useState(false);
-  const [feedback, setFeedback] = useState(null); // { type: 'success' | 'error', message: string }
+  const [feedback, setFeedback] = useState(null); // { type: 'success' | 'error' | 'guest_notice', message: string }
   const baseId = useId();
 
   const getActiveUser = () => {
@@ -49,18 +49,54 @@ const BuyActionWindow = ({ uid, mode = "BUY", customPrice = null, initialProduct
   const token = localStorage.getItem("token");
 
   useEffect(() => {
-    if (customPrice) {
-      setStockPrice(customPrice);
-      setLimitPrice(customPrice);
-    } else if (matchingStock) {
-      setStockPrice(matchingStock.price);
-      setLimitPrice(matchingStock.price);
-    }
+    const currentBase = customPrice || (matchingStock ? matchingStock.price : 100.0);
+    setStockPrice(currentBase);
+    setLimitPrice(currentBase);
   }, [uid, matchingStock, customPrice]);
 
   const isSell = mode === "SELL";
-  const executionPrice = orderType === "LIMIT" ? Number(limitPrice) : Number(stockPrice);
-  const marginRequired = Number(stockQuantity) * (executionPrice || 1);
+  const currentMarketPrice = Number(stockPrice) || 0;
+  const userLimitPrice = Number(limitPrice) || currentMarketPrice;
+  const estimatedOrderPrice = orderType === "LIMIT" ? userLimitPrice : currentMarketPrice;
+  const estimatedOrderValue = Number(stockQuantity) * (estimatedOrderPrice || 1);
+
+  // Compute execution expectation for Limit orders (Immediate vs Pending)
+  let executionExpectation = null;
+  if (orderType === "LIMIT") {
+    if (!isSell) {
+      if (userLimitPrice >= currentMarketPrice) {
+        executionExpectation = {
+          status: "IMMEDIATE",
+          text: `Limit ₹${userLimitPrice.toFixed(2)} ≥ Market ₹${currentMarketPrice.toFixed(2)}: Order will execute immediately at market ask (₹${currentMarketPrice.toFixed(2)}).`,
+          color: "#2e7d32",
+          bg: "#e8f5e9",
+        };
+      } else {
+        executionExpectation = {
+          status: "PENDING",
+          text: `Limit ₹${userLimitPrice.toFixed(2)} < Market ₹${currentMarketPrice.toFixed(2)}: Order will remain PENDING until market price drops to ₹${userLimitPrice.toFixed(2)} or lower. Maximum required margin (₹${estimatedOrderValue.toFixed(2)}) will be reserved.`,
+          color: "#b26a00",
+          bg: "#fff8e1",
+        };
+      }
+    } else {
+      if (userLimitPrice <= currentMarketPrice) {
+        executionExpectation = {
+          status: "IMMEDIATE",
+          text: `Limit ₹${userLimitPrice.toFixed(2)} ≤ Market ₹${currentMarketPrice.toFixed(2)}: Order will execute immediately at market bid (₹${currentMarketPrice.toFixed(2)}).`,
+          color: "#2e7d32",
+          bg: "#e8f5e9",
+        };
+      } else {
+        executionExpectation = {
+          status: "PENDING",
+          text: `Limit ₹${userLimitPrice.toFixed(2)} > Market ₹${currentMarketPrice.toFixed(2)}: Order will remain PENDING until market price reaches ₹${userLimitPrice.toFixed(2)} or higher. ${stockQuantity} shares will be locked from further sales.`,
+          color: "#b26a00",
+          bg: "#fff8e1",
+        };
+      }
+    }
+  }
 
   const handleOrderSubmit = async (e) => {
     if (e) e.preventDefault();
@@ -78,11 +114,12 @@ const BuyActionWindow = ({ uid, mode = "BUY", customPrice = null, initialProduct
           userId,
           name: uid,
           qty: parseInt(stockQuantity, 10),
-          price: executionPrice,
+          marketPrice: currentMarketPrice,
+          price: currentMarketPrice, // Market price baseline
           mode: mode || "BUY",
           product,
           orderType,
-          limitPrice: orderType === "LIMIT" ? Number(limitPrice) : null,
+          limitPrice: orderType === "LIMIT" ? userLimitPrice : null,
           idempotencyKey,
         },
         { headers, withCredentials: true }
@@ -93,7 +130,7 @@ const BuyActionWindow = ({ uid, mode = "BUY", customPrice = null, initialProduct
         if (isGuest) {
           setFeedback({
             type: "guest_notice",
-            message: `Trial order placed for ${stockQuantity}x ${uid}! Note: You are trading in Guest Trial Mode. Sign in or register to permanently save your orders and portfolio.`,
+            message: `${response.data.message || `Order placed for ${stockQuantity}x ${uid}!`}\n(Note: Guest trial session).`,
           });
           if (typeof refreshData === "function") {
             refreshData();
@@ -108,7 +145,7 @@ const BuyActionWindow = ({ uid, mode = "BUY", customPrice = null, initialProduct
           }
           setTimeout(() => {
             closeBuyWindow();
-          }, 1000);
+          }, 1200);
         }
       } else {
         setFeedback({
@@ -120,7 +157,7 @@ const BuyActionWindow = ({ uid, mode = "BUY", customPrice = null, initialProduct
       const errMessage =
         error.response?.data?.message ||
         error.response?.data?.rejectionReason ||
-        "Failed to place order. If your wallet balance is ₹0, please visit the Funds tab to deposit money via UPI.";
+        "Failed to place order. Please verify your available balance in the Funds tab.";
       setFeedback({
         type: "error",
         message: errMessage,
@@ -230,7 +267,7 @@ const BuyActionWindow = ({ uid, mode = "BUY", customPrice = null, initialProduct
       </div>
 
       {/* Input Fields */}
-      <div className="regular-order" style={{ padding: "12px 18px" }}>
+      <div className="regular-order" style={{ padding: "12px 18px 8px 18px" }}>
         <div className="inputs" style={{ display: "flex", gap: "12px" }}>
           <fieldset style={{ flex: 1 }}>
             <legend>Qty.</legend>
@@ -246,7 +283,7 @@ const BuyActionWindow = ({ uid, mode = "BUY", customPrice = null, initialProduct
           </fieldset>
 
           <fieldset style={{ flex: 1 }}>
-            <legend>{orderType === "LIMIT" ? "Limit Price" : "Market Price"}</legend>
+            <legend>{orderType === "LIMIT" ? "Limit Price (₹)" : "Market Price (₹)"}</legend>
             <input
               type="number"
               name="price"
@@ -255,8 +292,7 @@ const BuyActionWindow = ({ uid, mode = "BUY", customPrice = null, initialProduct
               disabled={orderType === "MARKET"}
               onChange={(e) => {
                 const val = parseFloat(e.target.value) || 0;
-                setStockPrice(val);
-                setLimitPrice(val);
+                setLimitPrice(val); // Only updates limitPrice; preserves stockPrice as market price
               }}
               value={orderType === "LIMIT" ? limitPrice : stockPrice}
               style={{ background: orderType === "MARKET" ? "#f9f9f9" : "#fff" }}
@@ -264,6 +300,32 @@ const BuyActionWindow = ({ uid, mode = "BUY", customPrice = null, initialProduct
           </fieldset>
         </div>
       </div>
+
+      {/* Detailed Price & Execution Expectation Banner for LIMIT Orders */}
+      {orderType === "LIMIT" && (
+        <div style={{ padding: "0 18px 10px 18px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "#666", marginBottom: "4px" }}>
+            <span>Market Price (LTP): <strong style={{ color: "#333" }}>₹{currentMarketPrice.toFixed(2)}</strong></span>
+            <span>Target Limit: <strong style={{ color: "#387ed1" }}>₹{userLimitPrice.toFixed(2)}</strong></span>
+          </div>
+          {executionExpectation && (
+            <div
+              style={{
+                padding: "6px 10px",
+                borderRadius: "3px",
+                fontSize: "0.72rem",
+                background: executionExpectation.bg,
+                color: executionExpectation.color,
+                border: `1px solid ${executionExpectation.color}33`,
+                fontWeight: 500,
+                lineHeight: "1.35",
+              }}
+            >
+              {executionExpectation.text}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Live Feedback Banner */}
       {feedback && (
@@ -294,7 +356,7 @@ const BuyActionWindow = ({ uid, mode = "BUY", customPrice = null, initialProduct
             lineHeight: "1.4",
           }}
         >
-          <div>{feedback.message}</div>
+          <div style={{ whiteSpace: "pre-line" }}>{feedback.message}</div>
           {feedback.type === "guest_notice" && (
             <div style={{ marginTop: "8px", display: "flex", gap: "8px", alignItems: "center" }}>
               <a
@@ -334,7 +396,8 @@ const BuyActionWindow = ({ uid, mode = "BUY", customPrice = null, initialProduct
       {/* Action Footer */}
       <div className="buttons" style={{ padding: "12px 18px", borderTop: "1px solid #f0f0f0" }}>
         <span style={{ fontSize: "0.82rem", color: "#666" }}>
-          Margin required: <strong style={{ color: "#333" }}>₹{marginRequired.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+          {orderType === "LIMIT" ? "Est. Order Value:" : "Margin required:"}{" "}
+          <strong style={{ color: "#333" }}>₹{estimatedOrderValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
         </span>
         <div>
           <button

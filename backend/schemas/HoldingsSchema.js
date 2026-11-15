@@ -15,6 +15,11 @@ const HoldingsSchema = new Schema({
     required: true,
     min: 0,
   },
+  lockedQty: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
   avg: {
     type: Number,
     required: true,

@@ -5,7 +5,7 @@ const DAILY_LIMIT = 800;
 
 class TwelveDataService {
   constructor() {
-    this.apiKey = localStorage.getItem("twelve_data_api_key") || "e3a7567d8f13431faf3c7e751e797817";
+    this.apiKey = localStorage.getItem("twelve_data_api_key") || "";
     this.callsToday = this.getStoredCallsToday();
     this.isRateLimited = false;
     this.lastError = null;
