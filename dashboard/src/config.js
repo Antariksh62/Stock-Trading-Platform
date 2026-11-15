@@ -23,3 +23,13 @@ export const FRONTEND_URL =
     ? "http://localhost:5173"
     : "";
 
+// Razorpay Public Test Key ID for Frontend Checkout
+export const RAZORPAY_KEY_ID =
+  (typeof process !== "undefined" &&
+    process.env &&
+    (process.env.REACT_APP_RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID)) ||
+  (typeof window !== "undefined" &&
+    (window.VITE_RAZORPAY_KEY_ID || window.__ENV__?.VITE_RAZORPAY_KEY_ID)) ||
+  "";
+
+

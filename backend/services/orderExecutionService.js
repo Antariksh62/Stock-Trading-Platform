@@ -348,4 +348,6 @@ module.exports = {
   processOrder,
   cancelOrder,
   getOrCreateUserFunds,
+  acquireUserLock,
+  releaseUserLock,
 };

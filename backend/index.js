@@ -18,13 +18,22 @@ const { HoldingsModel } = require("./model/HoldingsModel");
 const { PositionsModel } = require("./model/PositionsModel");
 const { OrdersModel } = require("./model/OrdersModel");
 const { FundsModel } = require("./model/FundsModel");
+const { WalletTransactionModel } = require("./model/WalletTransactionModel");
 const { UserModel } = require("./model/UserModel");
 const { Signup, Login, Logout } = require("./controllers/AuthController");
 const { userVerification } = require("./middlewares/AuthMiddleware");
 
 const { processOrder, cancelOrder, getOrCreateUserFunds } = require("./services/orderExecutionService");
+const { getUserTransactionHistory } = require("./services/paymentService");
 const { analyzePortfolio } = require("./services/portfolioAnalystService");
 const { tickerService } = require("./services/tickerService");
+const { validateRazorpayConfig } = require("./config/razorpay");
+const {
+  startReconciliationScheduler,
+  stopReconciliationScheduler,
+} = require("./services/paymentReconciliationService");
+const paymentRoutes = require("./routes/paymentRoutes");
+const webhookRoutes = require("./routes/webhookRoutes");
 
 const PORT = process.env.PORT || 3002;
 const uri = process.env.MONGO_URL;
@@ -90,6 +99,10 @@ const broadcastUserUpdates = async (userId) => {
   }
 };
 
+// Register broadcast handler with central socket service
+const { setBroadcastHandler } = require("./services/socketService");
+setBroadcastHandler(broadcastUserUpdates);
+
 app.use(
   cors({
     origin: true,
@@ -98,7 +111,32 @@ app.use(
   })
 );
 app.use(cookieParser());
-app.use(bodyParser.json());
+
+// ==========================================
+// RAW BODY MIDDLEWARE & WEBHOOK ROUTING
+// Razorpay webhooks require pristine raw request body for HMAC verification.
+// Mounted BEFORE standard bodyParser.json().
+// ==========================================
+app.use(
+  "/api/webhooks",
+  express.raw({ type: "*/*" }),
+  (req, res, next) => {
+    req.rawBody = Buffer.isBuffer(req.body)
+      ? req.body
+      : Buffer.from(req.body || "");
+    next();
+  },
+  webhookRoutes
+);
+
+// Standard JSON body parser with rawBody preservation for all other API routes
+app.use(
+  bodyParser.json({
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 
 // Helper middleware to extract user from token or fallback to demo_user
 const authHelper = (req, res, next) => {
@@ -291,6 +329,25 @@ app.get("/api/funds", authHelper, async (req, res) => {
   }
 });
 
+app.get("/api/funds/transactions", authHelper, async (req, res) => {
+  try {
+    const { page, limit, type } = req.query || {};
+    const history = await getUserTransactionHistory({
+      userId: req.userId,
+      page,
+      limit,
+      type,
+    });
+    res.json(history);
+  } catch (error) {
+    console.error("Error fetching transactions:", error);
+    res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || "Failed to fetch transactions",
+    });
+  }
+});
+
 app.post("/api/funds/add", authHelper, async (req, res) => {
   try {
     const amount = parseFloat(req.body.amount);
@@ -299,11 +356,32 @@ app.post("/api/funds/add", authHelper, async (req, res) => {
     }
 
     const funds = await getOrCreateUserFunds(req.userId);
+    const balanceBefore = funds.availableMargin;
     funds.availableCash = Number((funds.availableCash + amount).toFixed(2));
     funds.availableMargin = Number((funds.availableMargin + amount).toFixed(2));
     funds.payin = Number((funds.payin + amount).toFixed(2));
     funds.updatedAt = new Date();
     await funds.save();
+
+    // Record immutable ledger transaction
+    const paymentId = `UPI_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    await WalletTransactionModel.create({
+      userId: String(req.userId),
+      paymentId,
+      type: "DEPOSIT",
+      transactionType: "DEPOSIT",
+      amount: Math.round(amount * 100),
+      amountPaise: Math.round(amount * 100),
+      amountRupees: amount,
+      currency: "INR",
+      balanceBefore,
+      balanceBeforeRupees: balanceBefore,
+      balanceAfter: funds.availableMargin,
+      balanceAfterRupees: funds.availableMargin,
+      status: "COMPLETED",
+      description: `Simulated UPI Deposit (${paymentId})`,
+      timestamp: new Date(),
+    }).catch((txErr) => console.warn("Ledger record warning for UPI deposit:", txErr.message));
 
     broadcastUserUpdates(req.userId);
     res.json({ success: true, message: `₹${amount.toLocaleString()} added successfully via UPI`, funds });
@@ -325,10 +403,31 @@ app.post("/api/funds/withdraw", authHelper, async (req, res) => {
       return res.status(400).json({ message: "Withdrawal amount exceeds available cash" });
     }
 
+    const balanceBefore = funds.availableMargin;
     funds.availableCash = Number((funds.availableCash - amount).toFixed(2));
     funds.availableMargin = Number((funds.availableMargin - amount).toFixed(2));
     funds.updatedAt = new Date();
     await funds.save();
+
+    // Record immutable ledger transaction
+    const paymentId = `WTH_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    await WalletTransactionModel.create({
+      userId: String(req.userId),
+      paymentId,
+      type: "WITHDRAWAL",
+      transactionType: "WITHDRAWAL",
+      amount: Math.round(amount * 100),
+      amountPaise: Math.round(amount * 100),
+      amountRupees: amount,
+      currency: "INR",
+      balanceBefore,
+      balanceBeforeRupees: balanceBefore,
+      balanceAfter: funds.availableMargin,
+      balanceAfterRupees: funds.availableMargin,
+      status: "COMPLETED",
+      description: `Simulated Bank Withdrawal (${paymentId})`,
+      timestamp: new Date(),
+    }).catch((txErr) => console.warn("Ledger record warning for withdrawal:", txErr.message));
 
     broadcastUserUpdates(req.userId);
     res.json({ success: true, message: `Withdrawal request for ₹${amount.toLocaleString()} placed`, funds });
@@ -352,6 +451,11 @@ app.post("/api/portfolio/analyze", authHelper, async (req, res) => {
 });
 
 // ==========================================
+// 4b. RAZORPAY PAYMENT GATEWAY ROUTES
+// ==========================================
+app.use("/api/payments", paymentRoutes);
+
+// ==========================================
 // 5. AUTHENTICATION ROUTES
 // ==========================================
 app.post("/signup", Signup);
@@ -373,6 +477,28 @@ app.get("/api/quotes", async (req, res) => {
     console.warn("[/api/quotes] Error:", err.message);
     res.json({ quotes: {}, rateLimitExhausted: true, message: "Error fetching quotes: " + err.message });
   }
+});
+
+// ==========================================
+// 5b. DEPLOYMENT HEALTH CHECK ENDPOINT
+// ==========================================
+app.get(["/health", "/api/health"], (req, res) => {
+  const dbState = mongoose.connection?.readyState;
+  const dbStatus =
+    dbState === 1 ? "connected" : dbState === 2 ? "connecting" : "disconnected";
+  const rzpConfig = validateRazorpayConfig();
+
+  const isHealthy = dbState === 1;
+  return res.status(isHealthy ? 200 : 503).json({
+    status: isHealthy ? "UP" : "DEGRADED",
+    uptimeSeconds: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+    services: {
+      database: dbStatus,
+      razorpay: rzpConfig.isValid ? "configured_test_mode" : "misconfigured",
+      websockets: "active",
+    },
+  });
 });
 
 // ==========================================
@@ -423,13 +549,34 @@ if (staticFrontendDir) {
 // ==========================================
 server.listen(PORT, () => {
   console.log(`Zerodha Backend running on port ${PORT} with WebSocket support!`);
+
+  // Validate Razorpay Payment Gateway configuration (Strictly Test Mode)
+  const rzpConfig = validateRazorpayConfig();
+  if (rzpConfig.isValid) {
+    console.log(`[Razorpay] Successfully initialized in Test Mode (${rzpConfig.keyId})`);
+  }
+
   tickerService.start(io);
   if (uri) {
     mongoose
       .connect(uri)
-      .then(() => console.log("Connected to MongoDB Atlas!"))
+      .then(() => {
+        console.log("Connected to MongoDB Atlas!");
+        // Start background payment reconciliation scheduler
+        startReconciliationScheduler();
+      })
       .catch((err) => console.error("MongoDB Atlas connection error:", err));
   } else {
     console.warn("WARNING: MONGO_URL is not set in environment variables!");
   }
 });
+
+// Graceful shutdown hooks
+const handleShutdown = () => {
+  console.log("Shutting down gracefully...");
+  stopReconciliationScheduler();
+  process.exit(0);
+};
+
+process.on("SIGINT", handleShutdown);
+process.on("SIGTERM", handleShutdown);
