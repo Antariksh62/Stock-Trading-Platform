@@ -17,6 +17,7 @@ const { HoldingsModel } = require("./model/HoldingsModel");
 const { PositionsModel } = require("./model/PositionsModel");
 const { OrdersModel } = require("./model/OrdersModel");
 const { FundsModel } = require("./model/FundsModel");
+const { WalletTransactionModel } = require("./model/WalletTransactionModel");
 const { UserModel } = require("./model/UserModel");
 const { Signup, Login, Logout } = require("./controllers/AuthController");
 const { userVerification } = require("./middlewares/AuthMiddleware");
@@ -31,8 +32,16 @@ const {
   acquireUserLock,
   releaseUserLock,
 } = require("./services/orderExecutionService");
+const { getUserTransactionHistory } = require("./services/paymentService");
 const { analyzePortfolio } = require("./services/portfolioAnalystService");
 const { tickerService } = require("./services/tickerService");
+const { validateRazorpayConfig } = require("./config/razorpay");
+const {
+  startReconciliationScheduler,
+  stopReconciliationScheduler,
+} = require("./services/paymentReconciliationService");
+const paymentRoutes = require("./routes/paymentRoutes");
+const webhookRoutes = require("./routes/webhookRoutes");
 
 const PORT = process.env.PORT || 3001;
 const uri = process.env.MONGO_URL;
@@ -82,7 +91,32 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(cookieParser());
-app.use(bodyParser.json());
+
+// ==========================================
+// RAW BODY MIDDLEWARE & WEBHOOK ROUTING
+// Razorpay webhooks require pristine raw request body for HMAC verification.
+// Mounted BEFORE standard bodyParser.json().
+// ==========================================
+app.use(
+  "/api/webhooks",
+  express.raw({ type: "*/*" }),
+  (req, res, next) => {
+    req.rawBody = Buffer.isBuffer(req.body)
+      ? req.body
+      : Buffer.from(req.body || "");
+    next();
+  },
+  webhookRoutes
+);
+
+// Standard JSON body parser with rawBody preservation for all other API routes
+app.use(
+  bodyParser.json({
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 
 // ==========================================
 // 1. WEBSOCKET SERVER (SOCKET.IO) WITH STRICT AUTH
@@ -157,6 +191,10 @@ const broadcastUserUpdates = async (userId) => {
     console.error("[WebSocket Broadcast Error]:", err);
   }
 };
+
+// Register broadcast handler with central socket service
+const { setBroadcastHandler } = require("./services/socketService");
+setBroadcastHandler(broadcastUserUpdates);
 
 // ==========================================
 // STRICT AUTHENTICATION MIDDLEWARE
@@ -394,6 +432,25 @@ app.get("/api/funds", authHelper, async (req, res) => {
   }
 });
 
+app.get("/api/funds/transactions", authHelper, async (req, res) => {
+  try {
+    const { page, limit, type } = req.query || {};
+    const history = await getUserTransactionHistory({
+      userId: req.userId,
+      page,
+      limit,
+      type,
+    });
+    res.json(history);
+  } catch (error) {
+    console.error("Error fetching transactions:", error);
+    res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || "Failed to fetch transactions",
+    });
+  }
+});
+
 app.post("/api/funds/add", authHelper, async (req, res) => {
   try {
     const rawAmount = req.body.amount;
@@ -406,11 +463,32 @@ app.post("/api/funds/add", authHelper, async (req, res) => {
     await acquireUserLock(req.userId);
     try {
       const funds = await getOrCreateUserFunds(req.userId);
+      const balanceBefore = funds.availableMargin;
       funds.availableCash = Number((funds.availableCash + amount).toFixed(2));
       funds.availableMargin = Number((funds.availableMargin + amount).toFixed(2));
       funds.payin = Number((funds.payin + amount).toFixed(2));
       funds.updatedAt = new Date();
       await funds.save();
+
+      // Record immutable ledger transaction
+      const paymentId = `UPI_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      await WalletTransactionModel.create({
+        userId: String(req.userId),
+        paymentId,
+        type: "DEPOSIT",
+        transactionType: "DEPOSIT",
+        amount: Math.round(amount * 100),
+        amountPaise: Math.round(amount * 100),
+        amountRupees: amount,
+        currency: "INR",
+        balanceBefore,
+        balanceBeforeRupees: balanceBefore,
+        balanceAfter: funds.availableMargin,
+        balanceAfterRupees: funds.availableMargin,
+        status: "COMPLETED",
+        description: `Simulated UPI Deposit (${paymentId})`,
+        timestamp: new Date(),
+      }).catch((txErr) => console.warn("Ledger record warning for UPI deposit:", txErr.message));
 
       await broadcastUserUpdates(req.userId);
       res.json({ success: true, message: `₹${amount.toLocaleString()} added successfully via UPI`, funds });
@@ -452,6 +530,27 @@ app.post("/api/funds/withdraw", authHelper, async (req, res) => {
         });
       }
 
+      // Record immutable ledger transaction
+      const balanceBefore = Number((updatedFunds.availableMargin + amount).toFixed(2));
+      const paymentId = `WTH_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      await WalletTransactionModel.create({
+        userId: String(req.userId),
+        paymentId,
+        type: "WITHDRAWAL",
+        transactionType: "WITHDRAWAL",
+        amount: Math.round(amount * 100),
+        amountPaise: Math.round(amount * 100),
+        amountRupees: amount,
+        currency: "INR",
+        balanceBefore,
+        balanceBeforeRupees: balanceBefore,
+        balanceAfter: updatedFunds.availableMargin,
+        balanceAfterRupees: updatedFunds.availableMargin,
+        status: "COMPLETED",
+        description: `Simulated Bank Withdrawal (${paymentId})`,
+        timestamp: new Date(),
+      }).catch((txErr) => console.warn("Ledger record warning for withdrawal:", txErr.message));
+
       await broadcastUserUpdates(req.userId);
       res.json({ success: true, message: `Withdrawal request for ₹${amount.toLocaleString()} placed`, funds: updatedFunds });
     } finally {
@@ -477,7 +576,12 @@ app.post("/api/portfolio/analyze", authHelper, async (req, res) => {
 });
 
 // ==========================================
-// 7. AUTHENTICATION ROUTES
+// 4b. RAZORPAY PAYMENT GATEWAY ROUTES
+// ==========================================
+app.use("/api/payments", paymentRoutes);
+
+// ==========================================
+// 5. AUTHENTICATION ROUTES
 // ==========================================
 app.post("/signup", Signup);
 app.post("/login", Login);
@@ -501,7 +605,29 @@ app.get("/api/quotes", async (req, res) => {
 });
 
 // ==========================================
-// 8. STATIC ASSET HOSTING & CATCH-ALL ROUTING
+// 5b. DEPLOYMENT HEALTH CHECK ENDPOINT
+// ==========================================
+app.get(["/health", "/api/health"], (req, res) => {
+  const dbState = mongoose.connection?.readyState;
+  const dbStatus =
+    dbState === 1 ? "connected" : dbState === 2 ? "connecting" : "disconnected";
+  const rzpConfig = validateRazorpayConfig();
+
+  const isHealthy = dbState === 1;
+  return res.status(isHealthy ? 200 : 503).json({
+    status: isHealthy ? "UP" : "DEGRADED",
+    uptimeSeconds: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+    services: {
+      database: dbStatus,
+      razorpay: rzpConfig.isValid ? "configured_test_mode" : "misconfigured",
+      websockets: "active",
+    },
+  });
+});
+
+// ==========================================
+// 6. STATIC ASSET HOSTING & CATCH-ALL ROUTING
 // ==========================================
 const frontendDist = path.join(__dirname, "../frontend/dist");
 const frontendBuild = path.join(__dirname, "../frontend/build");
@@ -561,6 +687,8 @@ const startServer = async () => {
       process.stdout.write("Connecting to MongoDB Atlas... ");
       await mongoose.connect(uri);
       console.log("Connected successfully!");
+      // Start background payment reconciliation scheduler
+      startReconciliationScheduler();
     } else {
       console.warn("WARNING: MONGO_URL is not set in environment variables!");
     }
@@ -573,6 +701,12 @@ const startServer = async () => {
       console.log(`  Trading Terminal:  http://localhost:${PORT}/dashboard`);
       console.log(`  API / WebSocket:   http://localhost:${PORT}`);
       console.log(`======================================================\n`);
+
+      // Validate Razorpay Payment Gateway configuration (Strictly Test Mode)
+      const rzpConfig = validateRazorpayConfig();
+      if (rzpConfig.isValid) {
+        console.log(`[Razorpay] Successfully initialized in Test Mode (${rzpConfig.keyId})`);
+      }
 
       // Wire dependencies for order execution & matching real-time broadcasts
       setOrderExecutionDependencies({ io, broadcastUserUpdates });
@@ -599,6 +733,7 @@ const startServer = async () => {
 const gracefulShutdown = async (signal) => {
   console.log(`\nReceived ${signal}. Gracefully shutting down...`);
   try {
+    stopReconciliationScheduler();
     if (tickerService.stop) tickerService.stop();
     server.close(() => {
       console.log("HTTP & WebSocket server closed.");

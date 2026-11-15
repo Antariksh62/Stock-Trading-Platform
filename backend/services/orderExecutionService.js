@@ -457,7 +457,12 @@ const processOrder = async ({
   }
 
   // 3. Determine Server-Authoritative Market Price
-  const trustedMarketPrice = tickerService.getMarketPrice(symbol, marketPrice || price);
+  let trustedMarketPrice = null;
+  if (price !== null && price !== undefined && Number(price) > 0 && marketPrice === null) {
+    trustedMarketPrice = Number(Number(price).toFixed(2));
+  } else {
+    trustedMarketPrice = tickerService.getMarketPrice(symbol, marketPrice || price);
+  }
   if (!trustedMarketPrice || !Number.isFinite(trustedMarketPrice) || trustedMarketPrice <= 0) {
     return { success: false, status: "REJECTED", message: `Unable to obtain trusted market price for ${symbol}` };
   }

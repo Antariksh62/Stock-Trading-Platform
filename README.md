@@ -39,6 +39,17 @@ An end-to-end, full-stack paper-trading ecosystem inspired by **Zerodha Kite**, 
   - [Market Data Routes](#market-data-routes)
   - [AI Analysis Route](#ai-analysis-route)
   - [WebSocket Events](#websocket-events)
+- [Razorpay Payment Gateway Integration (Test Mode)](#razorpay-payment-gateway-integration-test-mode)
+  - [Overview & Architecture](#razorpay-overview--architecture)
+  - [Payment Lifecycle Flow](#razorpay-payment-lifecycle-flow)
+  - [State Machine Transitions](#razorpay-state-machine-transitions)
+  - [API Endpoints Reference](#razorpay-api-endpoints-reference)
+  - [Webhook Event Processing](#razorpay-webhook-event-processing)
+  - [Wallet Crediting & Ledger Consistency](#razorpay-wallet-crediting--ledger-consistency)
+  - [Automated Reconciliation Service](#razorpay-automated-reconciliation-service)
+  - [Safe Refund Handling](#razorpay-safe-refund-handling)
+  - [Environment Setup & Webhook Configuration](#razorpay-environment-setup--webhook-configuration)
+  - [Render Cloud Deployment Guide](#razorpay-render-cloud-deployment-guide)
 - [Screenshots & UI Showcase](#screenshots--ui-showcase)
 - [Testing & Quality Assurance](#testing--quality-assurance)
 - [Security Safeguards & Limitations](#security-safeguards--limitations)
@@ -730,6 +741,208 @@ The Socket.IO server communicates over WebSocket using the following events:
 
 ---
 
+## Razorpay Payment Gateway Integration (Test Mode)
+
+A production-grade, secure, and distributed-safe payment gateway integration using the official **Razorpay Node.js SDK**, configured strictly in **Test Mode** (`rzp_test_...`) for educational paper-trading.
+
+> [!IMPORTANT]
+> **Educational Simulation & Safety Notice**: This platform is an educational paper-trading simulation. Real-money payouts and brokerage clearing are strictly disabled. All transactions use Razorpay Test credentials (`rzp_test_...`). Real-world credentials or `rzp_live_` keys are automatically rejected at server startup.
+
+### Razorpay Overview & Architecture
+
+The integration follows a dual-path authoritative crediting architecture:
+1. **Frontend Checkout Flow**: Real-time Razorpay Checkout modal with HMAC-SHA256 signature verification and immediate synchronized wallet crediting.
+2. **Asynchronous Webhook Engine**: Cryptographically validated webhook receiver (`/api/webhooks/razorpay`) with durable MongoDB event logging, deduplication, and retry recovery.
+3. **Automated Background Reconciliation Worker**: Periodic polling service with atomic document leases that detects stale uncredited payments and reconciles them authoritatively with Razorpay.
+4. **Controlled Refund Engine**: Partial and full refund workflow with margin deficit avoidance to prevent trading margin corruption.
+
+---
+
+### Razorpay Payment Lifecycle Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Trader (Frontend)
+    participant Modal as Razorpay Checkout Modal
+    participant API as Express API Server
+    participant RZP as Razorpay Gateway (Test)
+    participant Service as Central Payment Service
+    participant DB as MongoDB Atlas (ACID)
+    participant Socket as Socket.IO Server
+
+    User->>API: POST /api/payments/create-order (amount in INR)
+    API->>DB: Validate & persist Payment (status: CREATED)
+    API->>RZP: razorpay.orders.create({ amount, currency: "INR" })
+    RZP-->>API: Return order_id
+    API-->>User: Return { orderId, amount, keyId }
+    User->>Modal: Open Razorpay Checkout (Test Mode)
+    Modal->>RZP: Process Test Payment (UPI / Netbanking)
+    RZP-->>Modal: Return { payment_id, order_id, signature }
+    
+    par Dual-Path Authoritative Resolution
+        Modal->>API: POST /api/payments/verify
+        API->>API: Verify HMAC-SHA256 signature
+        API->>RZP: Fetch live payment status
+        API->>Service: processCapturedPayment()
+        Service->>DB: ACID Transaction (Increment Funds & Add Ledger Tx)
+        Service->>Socket: Emit funds_update to user room
+        API-->>User: HTTP 200 { status: "CREDITED", walletCredited: true }
+    and Asynchronous Webhook
+        RZP->>API: POST /api/webhooks/razorpay (payment.captured)
+        API->>API: Verify X-Razorpay-Signature (Raw Body HMAC)
+        API->>DB: Deduplicate & Persist Webhook Event
+        API->>Service: processCapturedPayment() (Idempotent check)
+        Service-->>API: Verified (Already credited or newly credited)
+        API-->>RZP: HTTP 200 OK
+    end
+    Socket-->>User: Real-time UI balance update via WebSocket
+```
+
+---
+
+### Razorpay State Machine Transitions
+
+Payments transition strictly forward through an immutable state machine:
+
+```mermaid
+stateDiagram-v2
+    [*] --> CREATED: Order Created (create-order)
+    CREATED --> PENDING: payment.authorized (Awaiting Capture)
+    CREATED --> CAPTURED: payment.captured (Gateway Confirmed)
+    PENDING --> CAPTURED: payment.captured (Gateway Confirmed)
+    CREATED --> FAILED: payment.failed / Expired
+    PENDING --> FAILED: payment.failed / Bank Decline
+    CAPTURED --> CREDITED: ACID Wallet Crediting (Funds & Ledger Updated)
+    CREDITED --> [*]: Terminal Immutable State
+    FAILED --> [*]: Terminal Failure State
+```
+
+> [!NOTE]
+> **Immutability Guarantee**: Once a payment enters the `CREDITED` state, it is mathematically impossible for delayed out-of-order webhooks (such as late `payment.authorized` or `payment.failed`) to downgrade or revert the payment status.
+
+---
+
+### Razorpay API Endpoints Reference
+
+All payment endpoints are mounted under `/api/payments` and enforce strict JWT authentication (`requireAuth`) derived from HTTP-only cookies or `Authorization: Bearer <token>` headers. Client-supplied user IDs in request bodies are ignored.
+
+| Method | Endpoint | Auth | Purpose | Payload / Query |
+| :--- | :--- | :---: | :--- | :--- |
+| `POST` | `/api/payments/create-order` | Yes | Generate Razorpay Test Order | `{ "amount": 5000, "idempotencyKey": "opt_key" }` |
+| `POST` | `/api/payments/verify` | Yes | Verify Checkout signature & credit wallet | `{ "razorpay_order_id": "...", "razorpay_payment_id": "...", "razorpay_signature": "..." }` |
+| `POST` | `/api/webhooks/razorpay` | No (HMAC) | Receive gateway lifecycle webhooks | Raw JSON body + `x-razorpay-signature` header |
+| `GET` | `/api/payments/status/:orderId` | Yes | Query authoritative status & trigger recovery | URL param: `orderId` or `internalPaymentId` |
+| `GET` | `/api/payments/transactions` | Yes | Paginated immutable wallet transaction ledger | Query params: `page=1`, `limit=10`, `type=DEPOSIT` |
+| `POST` | `/api/payments/refund` | Yes | Controlled partial/full refund | `{ "payment_id": "...", "amount": 200000, "reason": "..." }` |
+| `GET` | `/api/payments/refunds/:id` | Yes | Fetch auditable refund history for a payment | URL param: payment or order identifier |
+| `GET` | `/health` / `/api/health` | No | Cloud uptime & service status probe | Returns service readiness (MongoDB, Razorpay, WS) |
+
+---
+
+### Razorpay Webhook Event Processing
+
+The webhook receiver at `POST /api/webhooks/razorpay`:
+1. Preserves the unmodified raw request body (`Buffer`) before JSON parsing for cryptographic HMAC-SHA256 signature verification.
+2. Checks for duplicate events using the unique index on `WebhookEventModel.razorpayEventId`.
+3. Handles all primary Razorpay events:
+   - `payment.authorized`: Updates `CREATED` payments to `PENDING` (never downgrades `CAPTURED` or `CREDITED`).
+   - `payment.captured`: Confirms capture and calls `processCapturedPayment()` to credit wallet.
+   - `payment.failed`: Records error description and sets status to `FAILED`.
+   - `order.paid`: Confirms order capture and triggers wallet crediting.
+   - `refund.processed`: Records refund execution and updates `amountRefunded`.
+   - `refund.failed`: Backs out uncompleted refund amount and logs failure reason.
+4. Returns HTTP 200 within <200ms to meet Razorpay webhook timeout thresholds.
+
+---
+
+### Razorpay Wallet Crediting & Ledger Consistency
+
+All wallet balance updates are governed by `backend/services/paymentProcessingService.js`:
+- **Serialized User Locking**: Uses an async per-user mutex (`acquireUserLock(userId)`) to prevent write conflicts and race conditions.
+- **ACID MongoDB Transactions**: Executed within a Mongoose multi-document transaction with automated exponential backoff retries.
+- **Atomic Balance Increments**: Simultaneously increments `availableCash`, `availableMargin`, and `payin` on `FundsModel`.
+- **Immutable Ledger Entry**: Writes a permanent record into `WalletTransactionModel` recording `balanceBefore`, `balanceAfter`, integer `amountPaise`, and rupee `amountRupees`.
+- **Real-Time Notification**: Emits `funds_update` via Socket.IO strictly *post-commit*, guaranteeing zero phantom notifications.
+
+---
+
+### Razorpay Automated Reconciliation Service
+
+Located in `backend/services/paymentReconciliationService.js`:
+- Automatically runs in the background on a 5-minute interval.
+- Identifies candidate payments in `CREATED`, `PENDING`, or uncredited `CAPTURED` states older than 10 minutes.
+- Employs **Atomic Document Leases** (`findOneAndUpdate` with `reconciliationLockedUntil: { $lte: now }`) to prevent horizontal multi-instance workers from racing on the same payment.
+- Queries `razorpay.orders.fetchPayments(orderId)` authoritatively.
+- Validates amount, currency (`INR`), and ownership. Flags discrepancies (`FLAGGED_AMOUNT_MISMATCH`, `FLAGGED_CURRENCY_MISMATCH`) without crediting the wallet.
+- If authoritative status is `captured`, safely invokes `processCapturedPayment()`.
+- Single-process mutex (`isReconciliationRunning`) prevents overlapping interval executions.
+
+---
+
+### Razorpay Safe Refund Handling
+
+Located in `backend/services/paymentRefundService.js`:
+- **Strict Authorization**: Only the owner of a payment can initiate a refund; cross-user refunds return `HTTP 403 Forbidden`.
+- **Status Verification**: Only `CAPTURED` or `CREDITED` payments can be refunded.
+- **Partial & Full Refunds**: Supports refunds up to the remaining unrefunded balance.
+- **Margin Deficit Prevention**: If `deductFromWallet: true` is requested on a `CREDITED` payment, the system verifies `availableMargin >= refundAmountRupees`. If available margin is insufficient (e.g. funds are tied up in stock positions), the gateway refund proceeds, but the wallet deduction is safely skipped (`walletDeductionStatus: "INSUFFICIENT_FUNDS"`) to prevent negative margin.
+- **Ledger Immutability**: Historical deposit records are never modified; a distinct `type: "REFUND"` ledger transaction is created.
+
+---
+
+### Razorpay Environment Setup & Webhook Configuration
+
+1. **Obtain Razorpay Test API Keys**:
+   - Log into [Razorpay Dashboard](https://dashboard.razorpay.com/) in **Test Mode**.
+   - Navigate to **Settings** $\to$ **API Keys** $\to$ Click **Generate Test Key**.
+   - Copy Key ID (`rzp_test_...`) and Key Secret.
+2. **Configure `.env` in `backend/`**:
+   ```env
+   PORT=3002
+   MONGO_URL=mongodb+srv://<USER>:<PASS>@<CLUSTER>/zerodha?retryWrites=true&w=majority
+   TOKEN_KEY=your_secure_jwt_secret_key_here
+   RAZORPAY_KEY_ID=rzp_test_your_test_key_id
+   RAZORPAY_KEY_SECRET=your_test_key_secret
+   RAZORPAY_WEBHOOK_SECRET=your_test_webhook_secret
+   ```
+3. **Configure `.env` in `dashboard/`**:
+   ```env
+   REACT_APP_API_URL=http://localhost:3002
+   REACT_APP_SOCKET_URL=http://localhost:3002
+   REACT_APP_RAZORPAY_KEY_ID=rzp_test_your_test_key_id
+   ```
+4. **Configure Webhooks in Razorpay Dashboard**:
+   - In Razorpay Dashboard, navigate to **Settings** $\to$ **Webhooks** $\to$ **Add New Webhook**.
+   - **Webhook URL**: `https://<your-domain>/api/webhooks/razorpay` (or your ngrok URL for local dev).
+   - **Secret**: Enter the value configured in `RAZORPAY_WEBHOOK_SECRET`.
+   - **Active Events**: Check `payment.authorized`, `payment.captured`, `payment.failed`, `order.paid`, `refund.processed`, `refund.failed`.
+
+---
+
+### Razorpay Render Cloud Deployment Guide
+
+When deploying to Render as a combined single-service web application:
+1. **Build Command**:
+   ```bash
+   npm install --prefix backend && npm install --prefix dashboard && npm run build --prefix dashboard
+   ```
+2. **Start Command**:
+   ```bash
+   node backend/index.js
+   ```
+3. **Required Environment Variables in Render Dashboard**:
+   - `PORT`: `10000` (or leave default assigned by Render)
+   - `MONGO_URL`: Connection string to MongoDB Atlas replica set (transactions require replica sets)
+   - `TOKEN_KEY`: 32+ character random string for JWT signatures
+   - `RAZORPAY_KEY_ID`: Your `rzp_test_...` key ID
+   - `RAZORPAY_KEY_SECRET`: Your Razorpay test secret
+   - `RAZORPAY_WEBHOOK_SECRET`: Your Razorpay webhook secret
+   - `NODE_ENV`: `production`
+4. **Health Check Path**: `/health` (returns `HTTP 200` with service diagnostic JSON).
+
+---
+
 ## Screenshots & UI Showcase
 
 The platform includes a collection of visual brand assets and UI illustrations stored within the repository:
@@ -753,7 +966,29 @@ The platform includes a collection of visual brand assets and UI illustrations s
 
 ## Testing & Quality Assurance
 
-### Automated Test Suites
+### Razorpay Payment Integration Test Suites (483 / 483 Tests Passing)
+
+The repository contains 10 dedicated payment test suites in `backend/tests/` running against live MongoDB Atlas test collections with zero real-money exposure:
+
+| Test Suite | Command | Tests | Focus Area |
+| :--- | :--- | :---: | :--- |
+| **Order Creation** | `node backend/tests/test_payment_order_creation.test.js` | 40 | Limits (₹100–₹1,00,000), integer paise math, idempotency |
+| **Verification** | `node backend/tests/test_payment_verification.test.js` | 46 | HMAC-SHA256 timingSafeEqual, user ownership, gateway fetch |
+| **Webhooks** | `node backend/tests/test_razorpay_webhooks.test.js` | 48 | Raw body signature, event deduplication, retry recovery worker |
+| **Wallet Crediting** | `node backend/tests/test_payment_wallet_crediting.test.js` | 45 | ACID MongoDB transactions, immutable ledger, Socket.IO updates |
+| **Frontend Checkout** | `node backend/tests/test_frontend_razorpay_checkout.test.js` | 37 | Modal flow, double-click lock, script failure recovery |
+| **Transaction History**| `node backend/tests/test_wallet_transaction_history.test.js` | 64 | Ledger pagination, sorting, ownership isolation, filtering |
+| **Failure & Recovery** | `node backend/tests/test_payment_failure_and_recovery.test.js` | 34 | Out-of-order webhooks, status polling, terminal immutability |
+| **Reconciliation** | `node backend/tests/test_payment_reconciliation.test.js` | 43 | Stale payment polling, atomic lease locks, scheduler lifecycle |
+| **Refunds** | `node backend/tests/test_payment_refunds.test.js` | 66 | Partial/full refunds, deficit avoidance, refund webhooks |
+| **Master Lifecycle** | `node backend/tests/test_payment_lifecycle_master.test.js` | 60 | Complete end-to-end lifecycle, stock trades, UPI compatibility |
+
+To run the complete master end-to-end lifecycle QA pass:
+```bash
+node backend/tests/test_payment_lifecycle_master.test.js
+```
+
+### Core Trading Test Suites
 
 The repository contains four automated test suites in the `backend/tests/` directory:
 

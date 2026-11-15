@@ -167,4 +167,3 @@ module.exports = {
   allStocks,
   stockPriceMap,
 };
-
