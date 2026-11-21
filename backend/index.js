@@ -654,6 +654,16 @@ const frontendDist = path.join(__dirname, "../frontend/dist");
 const frontendBuild = path.join(__dirname, "../frontend/build");
 const dashboardBuild = path.join(__dirname, "../dashboard/build");
 
+// Favicon handling: serve official Zerodha icon for /favicon.ico and /favicon.svg
+const faviconSvgPath = path.join(__dirname, "../frontend/public/favicon.svg");
+app.get(["/favicon.ico", "/favicon.svg"], (req, res) => {
+  if (fs.existsSync(faviconSvgPath)) {
+    res.type("image/svg+xml").sendFile(faviconSvgPath);
+  } else {
+    res.status(204).end();
+  }
+});
+
 // Trading Terminal (Dashboard) build hosting
 if (fs.existsSync(dashboardBuild)) {
   app.use("/dashboard", express.static(dashboardBuild));
