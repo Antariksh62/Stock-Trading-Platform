@@ -148,7 +148,6 @@ const io = new Server(server, {
 
 io.use((socket, next) => {
   let token = socket.handshake.auth?.token || socket.handshake.query?.token;
-  const passedUserId = socket.handshake.auth?.userId || socket.handshake.query?.userId;
 
   // Fallback: Check cookies in socket handshake headers
   if (!token && socket.handshake.headers.cookie) {
@@ -159,24 +158,25 @@ io.use((socket, next) => {
     }
   }
 
-  if (token) {
-    try {
-      const tokenSecret = process.env.TOKEN_KEY;
-      if (tokenSecret) {
-        const decoded = jwt.verify(token, tokenSecret);
-        if (decoded && decoded.id) {
-          socket.userId = String(decoded.id);
-          return next();
-        }
-      }
-    } catch (err) {
-      // Token invalid or expired, fallback to guest identity
-    }
+  if (!token) {
+    return next(new Error("Authentication error: No JWT provided"));
   }
 
-  // Allow guest / trial connections to view live public ticker feeds
-  socket.userId = passedUserId || "demo_user";
-  next();
+  try {
+    const tokenSecret = process.env.TOKEN_KEY;
+    if (!tokenSecret) {
+      return next(new Error("Authentication error: Server missing TOKEN_KEY configuration"));
+    }
+    const decoded = jwt.verify(token, tokenSecret);
+    if (!decoded || !decoded.id) {
+      return next(new Error("Authentication error: Malformed JWT payload"));
+    }
+    // Scope identity exclusively to verified user ID
+    socket.userId = String(decoded.id);
+    next();
+  } catch (err) {
+    return next(new Error(`Authentication error: ${err.message}`));
+  }
 });
 
 io.on("connection", (socket) => {

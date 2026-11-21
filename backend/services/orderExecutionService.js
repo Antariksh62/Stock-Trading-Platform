@@ -729,7 +729,7 @@ const cancelOrder = async (orderId, userId = "demo_user") => {
   const order = await OrdersModel.findOneAndUpdate(
     { _id: orderId, userId: effectiveUserId, status: "PENDING" },
     { $set: { status: "CANCELLED", updatedAt: new Date() } },
-    { returnDocument: "before" }
+    { returnDocument: "after" }
   );
 
   if (!order) {

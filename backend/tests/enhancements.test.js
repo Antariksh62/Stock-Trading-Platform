@@ -1,10 +1,15 @@
 const axios = require('axios');
 const ioClient = require('socket.io-client');
 const mongoose = require('mongoose');
-require('dotenv').config();
+const jwt = require('jsonwebtoken');
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 const API_BASE = 'http://localhost:3001';
 const TEST_USER_ID = 'test_suite_user_' + Date.now();
+const TOKEN_KEY = process.env.TOKEN_KEY || 'your_jwt_secret';
+const userToken = jwt.sign({ id: TEST_USER_ID }, TOKEN_KEY, { expiresIn: '1h' });
+const authHeader = { headers: { Authorization: `Bearer ${userToken}` } };
 
 async function runTests() {
   console.log('====================================================');
@@ -28,7 +33,7 @@ async function runTests() {
     // Connect WebSocket Client
     console.log('--> Setting up WebSocket Client...');
     const socket = ioClient(API_BASE, {
-      auth: { token: 'test_token', userId: TEST_USER_ID },
+      auth: { token: userToken, userId: TEST_USER_ID },
       transports: ['websocket', 'polling']
     });
 
@@ -46,7 +51,7 @@ async function runTests() {
 
     // 1. Initial Funds Check (New account starts with ₹0)
     console.log('\n--- 1. Funds Check (New Account Initial Balance ₹0) ---');
-    const initialFundsRes = await axios.get(`${API_BASE}/api/funds?userId=${TEST_USER_ID}`);
+    const initialFundsRes = await axios.get(`${API_BASE}/api/funds?userId=${TEST_USER_ID}`, authHeader);
     assert(initialFundsRes.status === 200 && initialFundsRes.data.availableMargin === 0, 
       'New user correctly initialized with ₹0.00 balance (must add funds via UPI)');
 
@@ -55,7 +60,7 @@ async function runTests() {
     const addFundsRes = await axios.post(`${API_BASE}/api/funds/add`, {
       userId: TEST_USER_ID,
       amount: 50000,
-    });
+    }, authHeader);
     assert(addFundsRes.status === 200 && addFundsRes.data.funds.availableMargin === 50000,
       'Funds added successfully via UPI: ₹50,000');
     const initialMargin = 50000;
@@ -71,12 +76,12 @@ async function runTests() {
       orderType: 'MARKET',
       product: 'CNC',
       idempotencyKey: 'idem_buy_1_' + Date.now()
-    });
+    }, authHeader);
     assert(buyRes.status === 201 && buyRes.data.order.status === 'FILLED', 
       'Buy order executed and status is FILLED');
 
     // Check Funds Deduction
-    const afterBuyFunds = await axios.get(`${API_BASE}/api/funds?userId=${TEST_USER_ID}`);
+    const afterBuyFunds = await axios.get(`${API_BASE}/api/funds?userId=${TEST_USER_ID}`, authHeader);
     const expectedMargin = initialMargin - 1000;
     assert(afterBuyFunds.data.availableMargin === expectedMargin, 
       `Funds correctly deducted (Initial: ₹${initialMargin}, After: ₹${afterBuyFunds.data.availableMargin})`);
@@ -93,7 +98,7 @@ async function runTests() {
       orderType: 'MARKET',
       product: 'CNC',
       idempotencyKey: duplicateKey
-    });
+    }, authHeader);
     const secondReq = await axios.post(`${API_BASE}/newOrder`, {
       userId: TEST_USER_ID,
       name: 'TEST_STOCK',
@@ -103,7 +108,7 @@ async function runTests() {
       orderType: 'MARKET',
       product: 'CNC',
       idempotencyKey: duplicateKey
-    });
+    }, authHeader);
     assert(secondReq.data.isDuplicate === true && secondReq.data.order._id === firstReq.data.order._id, 
       'Duplicate request safely identified and returned cached order without double-executing');
 
@@ -119,7 +124,7 @@ async function runTests() {
         orderType: 'MARKET',
         product: 'CNC',
         idempotencyKey: 'idem_huge_' + Date.now()
-      });
+      }, authHeader);
       assert(false, 'Should reject order when funds are insufficient');
     } catch (err) {
       assert(err.response && err.response.status === 400 && err.response.data.order.status === 'REJECTED', 
@@ -138,7 +143,7 @@ async function runTests() {
         orderType: 'MARKET',
         product: 'CNC',
         idempotencyKey: 'idem_sell_excess_' + Date.now()
-      });
+      }, authHeader);
       assert(false, 'Should reject sell order exceeding owned quantity');
     } catch (err) {
       assert(err.response && err.response.status === 400 && err.response.data.order.status === 'REJECTED', 
@@ -157,39 +162,41 @@ async function runTests() {
       orderType: 'LIMIT',
       product: 'CNC',
       idempotencyKey: 'idem_limit_' + Date.now()
-    });
+    }, authHeader);
     assert(limitOrderRes.status === 201 && limitOrderRes.data.order.status === 'PENDING', 
       'Limit order placed with status PENDING');
 
     const orderId = limitOrderRes.data.order._id;
-    const cancelRes = await axios.put(`${API_BASE}/cancelOrder/${orderId}?userId=${TEST_USER_ID}`);
+    const cancelRes = await axios.put(`${API_BASE}/cancelOrder/${orderId}?userId=${TEST_USER_ID}`, {}, authHeader);
     assert(cancelRes.status === 200 && cancelRes.data.order.status === 'CANCELLED', 
       'Pending order successfully cancelled');
 
     // 7. Concurrent Orders Concurrency Lock Test
     console.log('\n--- 7. Concurrent Orders Race Condition Protection ---');
     const concUser = 'conc_test_user_' + Date.now();
+    const concToken = jwt.sign({ id: concUser }, TOKEN_KEY, { expiresIn: '1h' });
+    const concHeader = { headers: { Authorization: `Bearer ${concToken}` } };
     // Deposit 100,000 via UPI for concurrency test
-    await axios.post(`${API_BASE}/api/funds/add`, { userId: concUser, amount: 100000 });
-    // Launch 5 parallel orders costing 500 each concurrently. Only 2 should succeed, 3 should fail.
+    await axios.post(`${API_BASE}/api/funds/add`, { userId: concUser, amount: 100000 }, concHeader);
+    // Launch 5 parallel orders costing 40,000 each concurrently. Only 2 should succeed, 3 should fail (total 100k available).
     const promises = [1, 2, 3, 4, 5].map(i => 
       axios.post(`${API_BASE}/newOrder`, {
         userId: concUser,
         name: 'CONC_STOCK',
         qty: 1,
-        price: 40000, // available default is 100000, 3 will succeed (120k > 100k so max 2 can succeed)
+        price: 40000,
         mode: 'BUY',
         orderType: 'MARKET',
         product: 'CNC',
         idempotencyKey: `idem_conc_${concUser}_${i}`
-      }).then(r => ({ status: 'fulfilled', data: r.data }))
+      }, concHeader).then(r => ({ status: 'fulfilled', data: r.data }))
         .catch(e => ({ status: 'rejected', err: e.response ? e.response.data : e.message }))
     );
 
     const concResults = await Promise.all(promises);
     const fulfilled = concResults.filter(r => r.status === 'fulfilled');
     const rejected = concResults.filter(r => r.status === 'rejected');
-    const concFunds = await axios.get(`${API_BASE}/api/funds?userId=${concUser}`);
+    const concFunds = await axios.get(`${API_BASE}/api/funds?userId=${concUser}`, concHeader);
 
     assert(fulfilled.length === 2 && rejected.length === 3, 
       `Mutex serialized concurrent orders: ${fulfilled.length} FILLED, ${rejected.length} REJECTED due to funds exhaustion`);
@@ -205,7 +212,7 @@ async function runTests() {
     console.log('\n--- 9. AI Portfolio Analyst Integration ---');
     const aiRes = await axios.post(`${API_BASE}/api/portfolio/analyze`, {
       userId: TEST_USER_ID
-    });
+    }, authHeader);
     assert(aiRes.status === 200 && aiRes.data.success === true, 
       'AI Portfolio Analyst API returned 200 OK');
     assert(aiRes.data.analysis && aiRes.data.analysis.overview && (aiRes.data.analysis.topGainersLosers || aiRes.data.analysis.topGainersAndLosers), 

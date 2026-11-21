@@ -2,7 +2,8 @@ const axios = require('axios');
 const ioClient = require('socket.io-client');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 const API_BASE = 'http://localhost:3001';
 const DASHBOARD_BASE = 'http://localhost:3000';
@@ -145,25 +146,25 @@ async function runComprehensiveQA() {
     // -------------------------------------------------------------
     console.log('\n--- SECTION 3: FUNDS MANAGEMENT ---');
 
-    // 3.1 Initial virtual funds check
-    const fundsRes = await axios.get(`${API_BASE}/api/funds?userId=${userAId}`, {
-      headers: { Authorization: `Bearer ${userAToken}` }
-    });
-    const initialFunds = fundsRes.data.availableMargin;
-    record('Funds', 'Initial Default Funds Allocation', fundsRes.status === 200 && initialFunds === 100000, `Available Margin: ₹${initialFunds}`);
+    const authHeaderA = { headers: { Authorization: `Bearer ${userAToken}` } };
 
-    // 3.2 Add Funds (Deposit)
+    // 3.1 Initial virtual funds check (New account starts with ₹0)
+    const fundsRes = await axios.get(`${API_BASE}/api/funds?userId=${userAId}`, authHeaderA);
+    const initialFunds = fundsRes.data.availableMargin;
+    record('Funds', 'Initial Default Funds Allocation (₹0 margin)', fundsRes.status === 200 && initialFunds === 0, `Available Margin: ₹${initialFunds}`);
+
+    // 3.2 Add Funds (Deposit ₹125,000)
     const depositRes = await axios.post(`${API_BASE}/api/funds/add`, {
       userId: String(userAId),
-      amount: 25000
-    }, { headers: { Authorization: `Bearer ${userAToken}` } });
+      amount: 125000
+    }, authHeaderA);
     record('Funds', 'Deposit Virtual Funds', depositRes.status === 200 && depositRes.data.funds.availableMargin === 125000, `New Margin: ₹${depositRes.data.funds?.availableMargin}`);
 
-    // 3.3 Withdraw Funds (Valid amount)
+    // 3.3 Withdraw Funds (Valid amount ₹10,000)
     const withdrawRes = await axios.post(`${API_BASE}/api/funds/withdraw`, {
       userId: String(userAId),
       amount: 10000
-    }, { headers: { Authorization: `Bearer ${userAToken}` } });
+    }, authHeaderA);
     record('Funds', 'Valid Withdrawal', withdrawRes.status === 200 && withdrawRes.data.funds.availableMargin === 115000, `New Margin: ₹${withdrawRes.data.funds?.availableMargin}`);
 
     // 3.4 Withdraw Funds exceeding balance
@@ -171,7 +172,7 @@ async function runComprehensiveQA() {
       await axios.post(`${API_BASE}/api/funds/withdraw`, {
         userId: String(userAId),
         amount: 9999999
-      }, { headers: { Authorization: `Bearer ${userAToken}` } });
+      }, authHeaderA);
       record('Funds', 'Excessive Withdrawal Rejection', false, 'Should have rejected overdraft');
     } catch (err) {
       record('Funds', 'Excessive Withdrawal Rejection', err.response?.status === 400, 'Overdraft safely rejected with HTTP 400');
@@ -192,14 +193,14 @@ async function runComprehensiveQA() {
       orderType: 'MARKET',
       product: 'CNC',
       idempotencyKey: `qa_buy_tcs_${timestamp}`
-    }, { headers: { Authorization: `Bearer ${userAToken}` } });
+    }, authHeaderA);
 
     record('Trading', 'Market Buy Execution (TCS x 10 @ ₹3500)', 
       buyOrderRes.status === 201 && buyOrderRes.data.order.status === 'FILLED', 
       `Order status: ${buyOrderRes.data.order?.status}`);
 
     // Verify Funds deduction: 115000 - 35000 = 80000
-    const fundsAfterBuy = await axios.get(`${API_BASE}/api/funds?userId=${userAId}`);
+    const fundsAfterBuy = await axios.get(`${API_BASE}/api/funds?userId=${userAId}`, authHeaderA);
     record('Trading', 'Post-Buy Margin Deduction', 
       fundsAfterBuy.data.availableMargin === 80000, 
       `Margin after ₹35k purchase: ₹${fundsAfterBuy.data.availableMargin}`);
@@ -214,14 +215,14 @@ async function runComprehensiveQA() {
       orderType: 'MARKET',
       product: 'CNC',
       idempotencyKey: `qa_buy_tcs_${timestamp}`
-    }, { headers: { Authorization: `Bearer ${userAToken}` } });
+    }, authHeaderA);
 
     record('Trading', 'Idempotency Protection (Duplicate Submission)', 
       duplicateRes.data.isDuplicate === true && duplicateRes.data.order._id === buyOrderRes.data.order._id, 
       'Returned cached order without executing second trade');
 
     // Verify Funds were NOT deducted twice
-    const fundsAfterDuplicate = await axios.get(`${API_BASE}/api/funds?userId=${userAId}`);
+    const fundsAfterDuplicate = await axios.get(`${API_BASE}/api/funds?userId=${userAId}`, authHeaderA);
     record('Trading', 'Funds Intact after Duplicate Prevention', 
       fundsAfterDuplicate.data.availableMargin === 80000, 
       `Margin remained strictly at ₹${fundsAfterDuplicate.data.availableMargin}`);
@@ -237,7 +238,7 @@ async function runComprehensiveQA() {
         orderType: 'MARKET',
         product: 'CNC',
         idempotencyKey: `qa_insufficient_${timestamp}`
-      });
+      }, authHeaderA);
       record('Trading', 'Insufficient Funds Rejection', false, 'Should reject order exceeding funds');
     } catch (err) {
       record('Trading', 'Insufficient Funds Rejection', 
@@ -256,7 +257,7 @@ async function runComprehensiveQA() {
       orderType: 'LIMIT',
       product: 'CNC',
       idempotencyKey: `qa_limit_infy_${timestamp}`
-    });
+    }, authHeaderA);
 
     record('Trading', 'Limit Order Placement (PENDING)', 
       limitOrderRes.status === 201 && limitOrderRes.data.order.status === 'PENDING', 
@@ -266,7 +267,7 @@ async function runComprehensiveQA() {
     const pendingOrderId = limitOrderRes.data.order._id;
     const cancelOrderRes = await axios.post(`${API_BASE}/cancelOrder/${pendingOrderId}`, {
       userId: String(userAId)
-    });
+    }, authHeaderA);
 
     record('Trading', 'Limit Order Cancellation', 
       cancelOrderRes.status === 200 && cancelOrderRes.data.order.status === 'CANCELLED', 
@@ -282,7 +283,7 @@ async function runComprehensiveQA() {
       orderType: 'MARKET',
       product: 'CNC',
       idempotencyKey: `qa_sell_tcs_${timestamp}`
-    });
+    }, authHeaderA);
 
     record('Trading', 'Valid Share Sale (4 of 10 TCS @ ₹3600)', 
       sellRes.status === 201 && sellRes.data.order.status === 'FILLED', 
@@ -299,7 +300,7 @@ async function runComprehensiveQA() {
         orderType: 'MARKET',
         product: 'CNC',
         idempotencyKey: `qa_sell_excess_${timestamp}`
-      });
+      }, authHeaderA);
       record('Trading', 'Excessive Sell Quantity Rejection', false, 'Should reject selling more shares than owned');
     } catch (err) {
       record('Trading', 'Excessive Sell Quantity Rejection', 
@@ -310,7 +311,11 @@ async function runComprehensiveQA() {
     // 4.8 Concurrency Mutex Race Condition Test
     console.log('\n--- SECTION 5: CONCURRENCY & RACE CONDITIONS ---');
     const concUser = `conc_qa_${timestamp}`;
-    await axios.get(`${API_BASE}/api/funds?userId=${concUser}`); // Initialized with ₹100,000
+    const concToken = jwt.sign({ id: concUser }, process.env.TOKEN_KEY || 'zerodha_secret_token_key_2026_secure', { expiresIn: '1h' });
+    const concHeader = { headers: { Authorization: `Bearer ${concToken}` } };
+    
+    // Deposit ₹100,000 for concUser
+    await axios.post(`${API_BASE}/api/funds/add`, { userId: concUser, amount: 100000 }, concHeader);
     
     // Launch 4 concurrent buy requests costing ₹40,000 each (4 * 40k = 160k > 100k). Exactly 2 must succeed, 2 must reject.
     const parallelOrders = [1, 2, 3, 4].map(idx => 
@@ -323,14 +328,14 @@ async function runComprehensiveQA() {
         orderType: 'MARKET',
         product: 'CNC',
         idempotencyKey: `conc_${concUser}_${idx}`
-      }).then(r => ({ status: 'FILLED', data: r.data }))
+      }, concHeader).then(r => ({ status: 'FILLED', data: r.data }))
         .catch(e => ({ status: 'REJECTED', err: e.response?.data }))
     );
 
     const parallelResults = await Promise.all(parallelOrders);
     const filledCount = parallelResults.filter(r => r.status === 'FILLED').length;
     const rejectedCount = parallelResults.filter(r => r.status === 'REJECTED').length;
-    const concFinalFunds = await axios.get(`${API_BASE}/api/funds?userId=${concUser}`);
+    const concFinalFunds = await axios.get(`${API_BASE}/api/funds?userId=${concUser}`, concHeader);
 
     record('Concurrency', 'Parallel Order Serialization (Mutex Locking)', 
       filledCount === 2 && rejectedCount === 2, 
@@ -392,16 +397,30 @@ async function runComprehensiveQA() {
     // -------------------------------------------------------------
     console.log('\n--- SECTION 8: APP HEALTH & ROUTES AVAILABILITY ---');
 
-    // Frontend Vite marketing routes
-    const frontendRes = await axios.get(FRONTEND_BASE);
-    record('WebApps', 'Frontend Marketing Web App (Port 5173)', frontendRes.status === 200, 'HTTP 200 OK');
+    // Frontend Vite marketing routes (dev port 5173 or unified port 3001)
+    let frontendOk = false;
+    try {
+      const frontendRes = await axios.get(FRONTEND_BASE);
+      frontendOk = frontendRes.status === 200;
+    } catch {
+      const unifiedLanding = await axios.get(`${API_BASE}/`);
+      frontendOk = unifiedLanding.status === 200;
+    }
+    record('WebApps', 'Frontend Marketing Web App Route', frontendOk, 'HTTP 200 OK');
 
-    // Dashboard React app
-    const dashboardRes = await axios.get(DASHBOARD_BASE);
-    record('WebApps', 'Trading Dashboard Web App (Port 3000)', dashboardRes.status === 200, 'HTTP 200 OK');
+    // Dashboard React app (dev port 3000 or unified port 3001/dashboard)
+    let dashboardOk = false;
+    try {
+      const dashboardRes = await axios.get(DASHBOARD_BASE);
+      dashboardOk = dashboardRes.status === 200;
+    } catch {
+      const unifiedDashboard = await axios.get(`${API_BASE}/dashboard`);
+      dashboardOk = unifiedDashboard.status === 200;
+    }
+    record('WebApps', 'Trading Dashboard Web App Route', dashboardOk, 'HTTP 200 OK');
 
     // Backend REST status
-    const backendHoldingsRes = await axios.get(`${API_BASE}/allHoldings`);
+    const backendHoldingsRes = await axios.get(`${API_BASE}/allHoldings`, authHeaderA);
     record('WebApps', 'Backend Database Holdings API (Port 3001)', backendHoldingsRes.status === 200, 'HTTP 200 OK');
 
     socketA.disconnect();
