@@ -349,65 +349,91 @@ const Menu = () => {
 
       {/* Mobile Navigation Drawer / Dropdown */}
       {isMobileNavOpen && (
-        <div ref={mobileNavRef} className="mobile-nav-drawer" role="dialog" aria-modal="true">
-          <div className="mobile-nav-header">
-            <div className="mobile-user-info">
-              <div className="avatar mobile-drawer-avatar">{avatarText}</div>
-              <div>
-                <div className="mobile-user-name">{username}</div>
-                <div className="mobile-user-badge">
-                  {isGuestUser ? "Guest Paper Trading" : "Active Client"}
+        <>
+          <div
+            className="mobile-nav-backdrop"
+            onClick={() => setIsMobileNavOpen(false)}
+            aria-hidden="true"
+          />
+          <div ref={mobileNavRef} className="mobile-nav-drawer" role="dialog" aria-modal="true">
+            <div className="mobile-nav-header">
+              <div className="mobile-user-info">
+                <div className="avatar mobile-drawer-avatar">{avatarText}</div>
+                <div>
+                  <div className="mobile-user-name">{username}</div>
+                  <div className="mobile-user-badge">
+                    {isGuestUser ? "Guest Paper Trading" : "Active Client"}
+                  </div>
                 </div>
               </div>
-            </div>
-            <button
-              type="button"
-              className="mobile-drawer-close"
-              onClick={() => setIsMobileNavOpen(false)}
-              aria-label="Close menu"
-            >
-              ✕
-            </button>
-          </div>
-
-          <div className="mobile-nav-list">
-            {NAV_ITEMS.map((item) => {
-              const active = isRouteActive(item.path);
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`mobile-nav-link ${active ? "active" : ""}`}
-                  onClick={() => setIsMobileNavOpen(false)}
-                >
-                  <span className="mobile-nav-icon">{item.icon}</span>
-                  <span className="mobile-nav-text">{item.name}</span>
-                  {active && <span className="mobile-nav-active-pill">●</span>}
-                </Link>
-              );
-            })}
-          </div>
-
-          <div className="mobile-nav-footer">
-            {isGuestUser ? (
-              <a
-                href={FRONTEND_URL ? `${FRONTEND_URL}/signup` : "/signup"}
-                className="mobile-auth-btn mobile-login-btn"
-                onClick={() => setIsMobileNavOpen(false)}
-              >
-                Log In / Sign Up
-              </a>
-            ) : (
               <button
                 type="button"
-                onClick={handleLogout}
-                className="mobile-auth-btn mobile-logout-btn"
+                className="mobile-drawer-close"
+                onClick={() => setIsMobileNavOpen(false)}
+                aria-label="Close menu"
               >
-                Logout
+                ✕
               </button>
-            )}
+            </div>
+
+            <div className="mobile-nav-list">
+              {NAV_ITEMS.map((item) => {
+                const active = isRouteActive(item.path);
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`mobile-nav-link ${active ? "active" : ""}`}
+                    onClick={() => setIsMobileNavOpen(false)}
+                  >
+                    <span className="mobile-nav-icon">{item.icon}</span>
+                    <span className="mobile-nav-text">{item.name}</span>
+                    {active && <span className="mobile-nav-active-pill">●</span>}
+                  </Link>
+                );
+              })}
+            </div>
+
+            <div className="mobile-nav-footer">
+              {isGuestUser ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <a
+                    href={FRONTEND_URL ? `${FRONTEND_URL}/login` : "/login"}
+                    className="mobile-auth-btn mobile-login-btn"
+                    onClick={() => setIsMobileNavOpen(false)}
+                  >
+                    Log In
+                  </a>
+                  <a
+                    href={FRONTEND_URL ? `${FRONTEND_URL}/signup` : "/signup"}
+                    className="mobile-auth-btn"
+                    style={{
+                      backgroundColor: "#ffffff",
+                      color: "#387ed1",
+                      border: "1px solid #387ed1",
+                    }}
+                    onClick={() => setIsMobileNavOpen(false)}
+                  >
+                    Sign Up
+                  </a>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  disabled={isLoggingOut}
+                  className="mobile-auth-btn mobile-logout-btn"
+                  style={{
+                    opacity: isLoggingOut ? 0.7 : 1,
+                    cursor: isLoggingOut ? "wait" : "pointer",
+                  }}
+                >
+                  {isLoggingOut ? "Logging out..." : "Logout"}
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
