@@ -10,6 +10,7 @@ import {
   fetchTransactionHistoryApi,
   checkPaymentStatusApi,
 } from "../services/razorpayService";
+import RazorpayTestCardNotice from "./RazorpayTestCardNotice";
 
 const Funds = () => {
   const { funds, refreshData } = useContext(GeneralContext);
@@ -1111,10 +1112,12 @@ const Funds = () => {
           <div
             style={{
               background: "#fff",
-              borderRadius: "6px",
+              borderRadius: "8px",
               padding: "24px",
-              width: "440px",
-              maxWidth: "92vw",
+              width: "500px",
+              maxWidth: "94vw",
+              maxHeight: "90vh",
+              overflowY: "auto",
               boxSizing: "border-box",
               boxShadow: "0 10px 35px rgba(0,0,0,0.25)",
               position: "relative",
@@ -1162,15 +1165,14 @@ const Funds = () => {
                 style={{
                   padding: "8px 12px",
                   borderRadius: "4px",
-                  background: "#fff9e6",
-                  border: "1px solid #ffe8b3",
+                  background: "#f0f7ff",
+                  border: "1px solid #cce5ff",
                   fontSize: "0.78rem",
-                  color: "#7d5200",
+                  color: "#004085",
                   marginBottom: "14px",
                 }}
               >
-                ⚠️ <strong>Guest Session:</strong> Razorpay Gateway requires a registered user session.
-                Please sign in, or use <strong>Simulated UPI</strong> for trial paper trading.
+                ℹ️ <strong>Guest Trial Mode:</strong> Razorpay Test Mode checkout is active. You can simulate deposits with the Mastercard test card below.
               </div>
             )}
 
@@ -1411,6 +1413,11 @@ const Funds = () => {
                   ))}
                 </div>
 
+                {/* Razorpay Test Mode Card & Instructions (Displayed before checkout) */}
+                {modalMode === "add" && addMethod === "razorpay" && (
+                  <RazorpayTestCardNotice />
+                )}
+
                 {/* Notification / Status Message Box */}
                 {message && (
                   <div
@@ -1578,7 +1585,9 @@ const Funds = () => {
                       ) : modalMode === "withdraw" ? (
                         "Confirm Withdrawal"
                       ) : addMethod === "razorpay" ? (
-                        "Proceed to Pay via Razorpay"
+                        amountInput && Number(amountInput) > 0
+                          ? `Pay with Razorpay (₹${Number(amountInput).toLocaleString()})`
+                          : "Pay with Razorpay"
                       ) : (
                         "Confirm & Pay via UPI"
                       )}

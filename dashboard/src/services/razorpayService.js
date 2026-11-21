@@ -60,6 +60,43 @@ export const loadRazorpayScript = () => {
 };
 
 /**
+ * Helper to ensure a valid session token exists in client storage.
+ * If user is exploring in Trial Mode without a prior signup, automatically
+ * initializes an authenticated trial session so Razorpay test orders can be created.
+ */
+export const ensureSessionToken = async () => {
+  if (typeof localStorage === "undefined") return null;
+  let token = localStorage.getItem("token");
+  if (token) return token;
+
+  try {
+    const guestNonce = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const guestRes = await axios.post(`${API_BASE}/signup`, {
+      username: `Trial User`,
+      email: `guest_${guestNonce}@trial.zerodha.com`,
+      password: `Trial_${guestNonce}!Pass`,
+    });
+    if (guestRes.data && guestRes.data.token) {
+      token = guestRes.data.token;
+      localStorage.setItem("token", token);
+      localStorage.setItem(
+        "user",
+        JSON.stringify({
+          id: guestRes.data.user?.id || guestRes.data.user?._id,
+          username: "GUEST TRIAL",
+          email: guestRes.data.user?.email,
+          isGuestTrial: true,
+        })
+      );
+      return token;
+    }
+  } catch (err) {
+    console.warn("Guest trial token auto-provision notice:", err.message);
+  }
+  return null;
+};
+
+/**
  * Helper to get authorization headers and active user identity from client storage.
  */
 export const getAuthHeaders = () => {
@@ -97,6 +134,7 @@ export const createPaymentOrderApi = async ({ amount, idempotencyKey }) => {
     throw new Error("Maximum deposit limit is ₹1,00,000 per transaction.");
   }
 
+  await ensureSessionToken();
   const config = getAuthHeaders();
   if (idempotencyKey) {
     config.headers["x-idempotency-key"] = idempotencyKey;
@@ -150,6 +188,7 @@ export const fetchTransactionHistoryApi = async ({
   limit = 10,
   type = null,
 } = {}) => {
+  await ensureSessionToken();
   const config = getAuthHeaders();
   const params = { page, limit };
   if (type) params.type = type;
