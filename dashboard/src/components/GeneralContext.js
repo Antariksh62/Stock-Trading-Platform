@@ -66,6 +66,18 @@ export const GeneralContextProvider = (props) => {
   }, []);
 
   const refreshData = useCallback(async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      // In Guest Paper Trading mode, avoid sending unauthenticated requests that 401.
+      try {
+        const savedFunds = localStorage.getItem("user_funds");
+        if (savedFunds) {
+          setFunds(JSON.parse(savedFunds));
+        }
+      } catch (e) {}
+      return;
+    }
+
     try {
       const config = getAuthHeaders();
       const [holdingsRes, positionsRes, ordersRes, fundsRes] = await Promise.all([
@@ -91,34 +103,38 @@ export const GeneralContextProvider = (props) => {
   useEffect(() => {
     const userId = getActiveUserId();
     const token = localStorage.getItem("token");
-    socketService.connect(userId, token);
+
+    let unsubHoldings = () => {};
+    let unsubPositions = () => {};
+    let unsubOrders = () => {};
+    let unsubFunds = () => {};
+
+    // Only establish authenticated WebSocket connection when user has an active session
+    if (token) {
+      socketService.connect(userId, token);
+
+      unsubHoldings = socketService.subscribe("holdings_update", (updatedHoldings) => {
+        if (updatedHoldings) setHoldings(updatedHoldings);
+      });
+
+      unsubPositions = socketService.subscribe("positions_update", (updatedPositions) => {
+        if (updatedPositions) setPositions(updatedPositions);
+      });
+
+      unsubOrders = socketService.subscribe("orders_update", (updatedOrders) => {
+        if (updatedOrders) setOrders(updatedOrders);
+      });
+
+      unsubFunds = socketService.subscribe("funds_update", (updatedFunds) => {
+        if (updatedFunds) {
+          setFunds(updatedFunds);
+          localStorage.setItem("user_funds", JSON.stringify(updatedFunds));
+        }
+      });
+    }
 
     // Initial load
     refreshData();
-
-    // Subscribe to real-time events emitted by the backend execution engine
-    const unsubHoldings = socketService.subscribe("holdings_update", (updatedHoldings) => {
-      console.log("[WebSocket] Received real-time holdings update:", updatedHoldings?.length);
-      if (updatedHoldings) setHoldings(updatedHoldings);
-    });
-
-    const unsubPositions = socketService.subscribe("positions_update", (updatedPositions) => {
-      console.log("[WebSocket] Received real-time positions update:", updatedPositions?.length);
-      if (updatedPositions) setPositions(updatedPositions);
-    });
-
-    const unsubOrders = socketService.subscribe("orders_update", (updatedOrders) => {
-      console.log("[WebSocket] Received real-time orders update:", updatedOrders?.length);
-      if (updatedOrders) setOrders(updatedOrders);
-    });
-
-    const unsubFunds = socketService.subscribe("funds_update", (updatedFunds) => {
-      console.log("[WebSocket] Received real-time funds update:", updatedFunds);
-      if (updatedFunds) {
-        setFunds(updatedFunds);
-        localStorage.setItem("user_funds", JSON.stringify(updatedFunds));
-      }
-    });
 
     return () => {
       unsubHoldings();
