@@ -42,6 +42,7 @@ An end-to-end, full-stack paper-trading ecosystem inspired by **Zerodha Kite**, 
   - [WebSocket Events](#websocket-events)
 - [Razorpay Payment Gateway Integration (Test Mode)](#razorpay-payment-gateway-integration-test-mode)
   - [Overview & Architecture](#razorpay-overview--architecture)
+  - [Razorpay Test Mode – Payment Testing](#razorpay-test-mode--payment-testing)
   - [System Responsibilities & Security Model](#razorpay-system-responsibilities--security-model)
   - [Payment Lifecycle Flow (8-Step Execution)](#razorpay-payment-lifecycle-flow-8-step-execution)
   - [State Machine Transitions & Immutability](#razorpay-state-machine-transitions--immutability)
@@ -768,6 +769,36 @@ The Razorpay integration provides an end-to-end simulated funds deposit and with
 4. **Multi-Document ACID Ledger**: Wallet balance updates are executed within atomic MongoDB transactions alongside immutable dual-entry ledger records in `WalletTransactionModel`.
 5. **Autonomous Self-Healing**: A background reconciliation worker periodically audits pending or uncredited transactions against Razorpay's authoritative gateway records, resolving discrepancies without human intervention.
 6. **Controlled Refund Protocol**: Provides partial and full refund capabilities with margin deficit protection, preventing traders from forcing their accounts into negative balances.
+
+---
+
+### Razorpay Test Mode – Payment Testing
+
+**Test Card Details**
+
+| Field | Value |
+|---|---|
+| Card Network | Mastercard |
+| Card Number | `5555 5100 0008 1006` |
+| Card Type | Credit |
+| Category | Business |
+| CVV | Any random CVV, if supported |
+| Expiry | Any future date, if supported |
+| OTP | Follow the documented Razorpay test authentication flow |
+
+**More Razorpay Test Cards:**  
+[Razorpay Official Test Card Details](https://razorpay.com/docs/payments/payments/test-card-details)
+
+#### Payment Testing Instructions
+
+1. Run the dashboard and navigate to Funds / Add Funds.
+2. Enter the desired deposit amount.
+3. Select Pay with Razorpay.
+4. Select Card in the Razorpay Checkout window.
+5. Enter the test card details listed above.
+6. Complete the simulated authentication process as instructed by Razorpay.
+
+> This project uses Razorpay Test Mode for demonstration purposes. No real money is deducted when valid test credentials and Test Mode API keys are used.
 
 ---
 
