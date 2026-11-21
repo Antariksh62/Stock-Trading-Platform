@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 import axios from "axios";
 import { API_BASE, FRONTEND_URL } from "../config";
+import { socketService } from "../services/socketService";
 
 const NAV_ITEMS = [
   { name: "Dashboard", path: "/", icon: "📊" },
@@ -18,8 +19,10 @@ const Menu = () => {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [username, setUsername] = useState("USERID");
   const [isGuestUser, setIsGuestUser] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  const profileRef = useRef(null);
+  const desktopProfileRef = useRef(null);
+  const mobileProfileRef = useRef(null);
   const mobileNavRef = useRef(null);
 
   useEffect(() => {
@@ -28,7 +31,10 @@ const Menu = () => {
     const token = localStorage.getItem("token");
     if (!token) {
       setIsGuestUser(true);
+    } else {
+      setIsGuestUser(false);
     }
+
     if (savedUser) {
       try {
         const parsed = JSON.parse(savedUser);
@@ -38,11 +44,13 @@ const Menu = () => {
       }
     }
 
-    // 2. Verify with backend token
+    // 2. Verify with backend token (support both HTTP-only cookie and Authorization header)
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
     axios
-      .post(`${API_BASE}/verify`, {}, { withCredentials: true })
+      .post(`${API_BASE}/verify`, {}, { withCredentials: true, headers })
       .then((res) => {
-        if (res.data.status && res.data.user) {
+        if (res.data && res.data.status && res.data.user) {
           setUsername(res.data.user.toUpperCase());
           setIsGuestUser(false);
           if (res.data.userId) {
@@ -55,7 +63,7 @@ const Menu = () => {
               })
             );
           }
-        } else {
+        } else if (!token) {
           setIsGuestUser(true);
         }
       })
@@ -67,9 +75,14 @@ const Menu = () => {
   // Close dropdowns on outside click or Escape key
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (profileRef.current && !profileRef.current.contains(e.target)) {
+      const isInsideDesktop = desktopProfileRef.current && desktopProfileRef.current.contains(e.target);
+      const isInsideMobile = mobileProfileRef.current && mobileProfileRef.current.contains(e.target);
+      const isInsideDropdownCard = e.target.closest && e.target.closest(".profile-dropdown-card");
+
+      if (!isInsideDesktop && !isInsideMobile && !isInsideDropdownCard) {
         setIsProfileDropDownOpen(false);
       }
+
       if (
         mobileNavRef.current &&
         !mobileNavRef.current.contains(e.target) &&
@@ -117,15 +130,43 @@ const Menu = () => {
     setIsMobileNavOpen((prev) => !prev);
   };
 
-  const handleLogout = async () => {
-    try {
-      await axios.post(`${API_BASE}/logout`, {}, { withCredentials: true });
-    } catch (e) {
-      console.error(e);
+  const handleLogout = async (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
     }
-    localStorage.removeItem("user");
-    localStorage.removeItem("token");
-    window.location.href = FRONTEND_URL ? `${FRONTEND_URL}/signup` : "/signup";
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+
+    try {
+      // 1. Notify backend to clear authentication cookies
+      await axios.post(`${API_BASE}/logout`, {}, { withCredentials: true });
+    } catch (err) {
+      console.warn("Backend logout warning:", err.message);
+    } finally {
+      // 2. Clear client-side stored session tokens & cached user data
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      localStorage.removeItem("user_funds");
+      sessionStorage.clear();
+
+      // 3. Clean up Socket.IO connection to stop receiving private updates
+      try {
+        socketService.disconnect();
+      } catch (wsErr) {
+        console.warn("Socket cleanup error:", wsErr);
+      }
+
+      // 4. Close profile dropdown and reset state
+      setIsProfileDropDownOpen(false);
+      setUsername("USERID");
+      setIsGuestUser(true);
+      setIsLoggingOut(false);
+
+      // 5. Authoritative redirect to login screen
+      const loginUrl = FRONTEND_URL ? `${FRONTEND_URL}/login` : "/login";
+      window.location.href = loginUrl;
+    }
   };
 
   const avatarText = username.slice(0, 2) || "ZU";
@@ -165,7 +206,7 @@ const Menu = () => {
 
         {/* User Profile Avatar & Dropdown */}
         <div
-          ref={profileRef}
+          ref={desktopProfileRef}
           className="profile"
           onClick={handleProfileClick}
           title="Account profile & settings"
@@ -186,19 +227,37 @@ const Menu = () => {
               </div>
               <hr className="dropdown-divider" />
               {isGuestUser ? (
-                <a
-                  href={FRONTEND_URL ? `${FRONTEND_URL}/signup` : "/signup"}
-                  className="dropdown-auth-btn dropdown-login-btn"
-                >
-                  Log In / Sign Up
-                </a>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <a
+                    href={FRONTEND_URL ? `${FRONTEND_URL}/login` : "/login"}
+                    className="dropdown-auth-btn dropdown-login-btn"
+                  >
+                    Log In
+                  </a>
+                  <a
+                    href={FRONTEND_URL ? `${FRONTEND_URL}/signup` : "/signup"}
+                    className="dropdown-auth-btn"
+                    style={{
+                      backgroundColor: "#ffffff",
+                      color: "#387ed1",
+                      border: "1px solid #387ed1",
+                    }}
+                  >
+                    Sign Up
+                  </a>
+                </div>
               ) : (
                 <button
                   type="button"
                   onClick={handleLogout}
+                  disabled={isLoggingOut}
                   className="dropdown-auth-btn dropdown-logout-btn"
+                  style={{
+                    opacity: isLoggingOut ? 0.7 : 1,
+                    cursor: isLoggingOut ? "wait" : "pointer",
+                  }}
                 >
-                  Logout
+                  {isLoggingOut ? "Logging out..." : "Logout"}
                 </button>
               )}
             </div>
@@ -211,7 +270,7 @@ const Menu = () => {
         <div
           className="profile mobile-profile"
           onClick={handleProfileClick}
-          ref={profileRef}
+          ref={mobileProfileRef}
           title="User profile"
         >
           <div className="avatar">{avatarText}</div>
@@ -228,19 +287,37 @@ const Menu = () => {
               </div>
               <hr className="dropdown-divider" />
               {isGuestUser ? (
-                <a
-                  href={FRONTEND_URL ? `${FRONTEND_URL}/signup` : "/signup"}
-                  className="dropdown-auth-btn dropdown-login-btn"
-                >
-                  Log In / Sign Up
-                </a>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <a
+                    href={FRONTEND_URL ? `${FRONTEND_URL}/login` : "/login"}
+                    className="dropdown-auth-btn dropdown-login-btn"
+                  >
+                    Log In
+                  </a>
+                  <a
+                    href={FRONTEND_URL ? `${FRONTEND_URL}/signup` : "/signup"}
+                    className="dropdown-auth-btn"
+                    style={{
+                      backgroundColor: "#ffffff",
+                      color: "#387ed1",
+                      border: "1px solid #387ed1",
+                    }}
+                  >
+                    Sign Up
+                  </a>
+                </div>
               ) : (
                 <button
                   type="button"
                   onClick={handleLogout}
+                  disabled={isLoggingOut}
                   className="dropdown-auth-btn dropdown-logout-btn"
+                  style={{
+                    opacity: isLoggingOut ? 0.7 : 1,
+                    cursor: isLoggingOut ? "wait" : "pointer",
+                  }}
                 >
-                  Logout
+                  {isLoggingOut ? "Logging out..." : "Logout"}
                 </button>
               )}
             </div>

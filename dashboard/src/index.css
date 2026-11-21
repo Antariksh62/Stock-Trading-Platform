@@ -298,11 +298,12 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 16px;
+  gap: 20px;
   height: 100%;
-  flex: 1 1 auto;
+  flex: 1 0 auto;
+  margin-left: auto;
   min-width: 0;
-  padding-left: 14px;
+  padding-left: 12px;
   box-sizing: border-box;
   position: relative;
 }
@@ -313,12 +314,14 @@ html, body {
   text-decoration: none;
   flex-shrink: 0;
   margin-right: auto;
+  padding-right: 12px;
 }
 
 .logo {
-  height: 22px;
+  height: 20px;
   width: auto;
   display: block;
+  flex-shrink: 0;
 }
 
 .menus {
@@ -884,46 +887,60 @@ html, body {
   min-height: 58px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   box-sizing: border-box;
   position: relative;
   z-index: 100;
   background: #ffffff;
   padding: 0 20px;
+  gap: 16px;
 }
 
 .indices-container {
-  flex: 0 0 360px;
-  max-width: 380px;
-  height: 100%;
-  padding: 0 16px 0 0;
-  border-right: 1px solid #e0e0e0;
-  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 14px;
+  gap: 16px;
+  height: 100%;
+  flex: 0 1 auto;
+  min-width: 0;
+  padding-right: 18px;
+  border-right: 1px solid #e0e0e0;
+  box-sizing: border-box;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.indices-container::-webkit-scrollbar {
+  display: none;
 }
 
 .index-item {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
   white-space: nowrap;
 }
 
 .nifty,
-.sensex {
+.sensex,
+.nasdaq {
   display: flex;
   align-items: center;
   gap: 6px;
   margin: 0;
+  flex-shrink: 0;
   white-space: nowrap;
 }
 
 .nifty > *,
-.sensex > * {
+.sensex > *,
+.nasdaq > * {
   margin: 0;
+  white-space: nowrap;
 }
 
 .index {
@@ -940,6 +957,7 @@ html, body {
   font-weight: 600;
   color: rgb(223, 73, 73);
   margin: 0;
+  white-space: nowrap;
 }
 
 .percent {
@@ -947,6 +965,7 @@ html, body {
   font-weight: 400;
   color: rgb(146, 146, 146);
   margin: 0;
+  white-space: nowrap;
 }
 
 .index:hover {
@@ -1055,15 +1074,17 @@ html, body {
    RESPONSIVE MEDIA QUERIES (1920px -> 320px)
    ========================================================================== */
 
-/* 1. Large Screens & Laptops (< 1200px) */
-@media (max-width: 1200px) {
+/* 1. Large Screens & Laptops (< 1280px) */
+@media (max-width: 1280px) {
+  .indices-container {
+    gap: 12px;
+    padding-right: 14px;
+  }
   .nasdaq-index {
     display: none !important;
   }
-  .indices-container {
-    flex: 0 0 auto;
-    max-width: 320px;
-    gap: 10px;
+  .stream-health {
+    display: none !important;
   }
 }
 
@@ -1077,11 +1098,10 @@ html, body {
   }
   .indices-container {
     flex: 0 1 auto;
-    max-width: 300px;
-    padding-right: 10px;
-    gap: 10px;
+    padding-right: 14px;
+    gap: 12px;
   }
-  .sensex.index-item {
+  .nasdaq-index {
     display: none !important;
   }
   .stream-health {
@@ -1094,6 +1114,23 @@ html, body {
 
 /* 3. Tablets (< 768px): Stacking layout & mobile tabs */
 @media (max-width: 767px) {
+  .topbar-container {
+    padding: 0 12px;
+    gap: 8px;
+  }
+
+  .indices-container {
+    border-right: none;
+    padding-right: 0;
+    gap: 10px;
+  }
+
+  .sensex.index-item,
+  .nasdaq-index,
+  .stream-health {
+    display: none !important;
+  }
+
   .dashboard-container {
     flex-direction: column;
     height: calc(100vh - 58px);
@@ -1165,20 +1202,17 @@ html, body {
 @media (max-width: 576px) {
   .topbar-container {
     padding: 0 10px;
+    gap: 6px;
   }
   .indices-container {
-    flex: 1 1 auto;
-    max-width: none;
+    flex: 0 1 auto;
     border-right: none;
-    padding: 0 6px 0 0;
+    padding: 0;
     gap: 8px;
   }
   .exchange-badge {
-    padding: 2px 5px !important;
+    padding: 2px 6px !important;
     font-size: 0.6rem !important;
-  }
-  .nifty .percent {
-    display: none;
   }
   .menu-container {
     flex: 0 0 auto;
@@ -1198,6 +1232,13 @@ html, body {
 @media (max-width: 360px) {
   .topbar-container {
     padding: 0 6px;
+    gap: 4px;
+  }
+  .indices-container {
+    gap: 6px;
+  }
+  .nifty .percent {
+    display: none !important;
   }
   .nifty .index {
     font-size: 0.72rem;

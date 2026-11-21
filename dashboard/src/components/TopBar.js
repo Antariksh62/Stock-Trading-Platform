@@ -199,7 +199,7 @@ const TopBar = () => {
         </div>
 
         {/* NASDAQ (QQQ) with Dynamic US Market Status Badge */}
-        <div className="sensex index-item nasdaq-index" title={`NASDAQ / US Tech Benchmark • Hours: ${exchangeStatuses.us.hours} • Current: ${exchangeStatuses.us.timeStr}`}>
+        <div className="nasdaq index-item nasdaq-index" title={`NASDAQ / US Tech Benchmark • Hours: ${exchangeStatuses.us.hours} • Current: ${exchangeStatuses.us.timeStr}`}>
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <p className="index" style={{ margin: 0 }}>{indicesData.nasdaq.name}</p>
             <span

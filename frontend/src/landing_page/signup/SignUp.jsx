@@ -1,8 +1,18 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
 
-function SignUp() {
-  const [isLogin, setIsLogin] = useState(false);
+function SignUp({ defaultLogin = false }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isLoginRoute = location.pathname === "/login" || defaultLogin;
+  const [isLogin, setIsLogin] = useState(isLoginRoute);
+
+  useEffect(() => {
+    setIsLogin(location.pathname === "/login" || defaultLogin);
+    setErrorMessage("");
+    setSuccessMessage("");
+  }, [location.pathname, defaultLogin]);
   const [formData, setFormData] = useState({
     email: "",
     username: "",
@@ -196,6 +206,11 @@ function SignUp() {
                 className="btn btn-link p-0 small text-decoration-none fw-semibold"
                 style={{ color: "#387ed1" }}
                 onClick={() => {
+                  if (isLogin) {
+                    navigate("/signup");
+                  } else {
+                    navigate("/login");
+                  }
                   setIsLogin(!isLogin);
                   setErrorMessage("");
                   setSuccessMessage("");

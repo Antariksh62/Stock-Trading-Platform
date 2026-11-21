@@ -31,7 +31,7 @@ const Home = () => {
   }, []);
 
   const signupUrl = FRONTEND_URL ? `${FRONTEND_URL}/signup` : "/signup";
-  const loginUrl = FRONTEND_URL ? `${FRONTEND_URL}/signup` : "/signup";
+  const loginUrl = FRONTEND_URL ? `${FRONTEND_URL}/login` : "/login";
 
   return (
     <GeneralContextProvider>
