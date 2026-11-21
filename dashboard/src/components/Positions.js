@@ -18,7 +18,7 @@ const Positions = () => {
 
   return (
     <>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", marginBottom: "16px" }}>
         <h3 className="title" style={{ margin: 0 }}>
           Positions ({allPositions.length})
         </h3>

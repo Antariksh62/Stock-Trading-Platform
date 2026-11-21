@@ -1114,6 +1114,8 @@ const Funds = () => {
               borderRadius: "6px",
               padding: "24px",
               width: "440px",
+              maxWidth: "92vw",
+              boxSizing: "border-box",
               boxShadow: "0 10px 35px rgba(0,0,0,0.25)",
               position: "relative",
             }}

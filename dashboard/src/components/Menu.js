@@ -1,16 +1,34 @@
-import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import React, { useState, useEffect, useRef } from "react";
+import { Link, useLocation } from "react-router-dom";
 import axios from "axios";
 import { API_BASE, FRONTEND_URL } from "../config";
 
+const NAV_ITEMS = [
+  { name: "Dashboard", path: "/", icon: "📊" },
+  { name: "Orders", path: "/orders", icon: "📋" },
+  { name: "Holdings", path: "/holdings", icon: "💼" },
+  { name: "Positions", path: "/positions", icon: "⚡" },
+  { name: "Funds", path: "/funds", icon: "💰" },
+  { name: "Apps", path: "/apps", icon: "📱" },
+];
+
 const Menu = () => {
-  const [selectedMenu, setSelectedMenu] = useState(0);
+  const location = useLocation();
   const [isProfileDropDownOpen, setIsProfileDropDownOpen] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [username, setUsername] = useState("USERID");
+  const [isGuestUser, setIsGuestUser] = useState(false);
+
+  const profileRef = useRef(null);
+  const mobileNavRef = useRef(null);
 
   useEffect(() => {
     // 1. Try reading from localStorage first for instant display
     const savedUser = localStorage.getItem("user");
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setIsGuestUser(true);
+    }
     if (savedUser) {
       try {
         const parsed = JSON.parse(savedUser);
@@ -26,6 +44,7 @@ const Menu = () => {
       .then((res) => {
         if (res.data.status && res.data.user) {
           setUsername(res.data.user.toUpperCase());
+          setIsGuestUser(false);
           if (res.data.userId) {
             localStorage.setItem(
               "user",
@@ -36,28 +55,71 @@ const Menu = () => {
               })
             );
           }
+        } else {
+          setIsGuestUser(true);
         }
       })
-      .catch((err) => {
-        console.error("Auth check failed:", err);
+      .catch(() => {
+        setIsGuestUser(!localStorage.getItem("token"));
       });
   }, []);
 
-  const handleMenuClick = (index) => {
-    setSelectedMenu(index);
-  };
+  // Close dropdowns on outside click or Escape key
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (profileRef.current && !profileRef.current.contains(e.target)) {
+        setIsProfileDropDownOpen(false);
+      }
+      if (
+        mobileNavRef.current &&
+        !mobileNavRef.current.contains(e.target) &&
+        !e.target.closest(".mobile-nav-toggle")
+      ) {
+        setIsMobileNavOpen(false);
+      }
+    };
+
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setIsProfileDropDownOpen(false);
+        setIsMobileNavOpen(false);
+      }
+    };
+
+    const handleResize = () => {
+      if (window.innerWidth >= 992) {
+        setIsMobileNavOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
+  // Automatically close mobile menu when navigating
+  useEffect(() => {
+    setIsMobileNavOpen(false);
+    setIsProfileDropDownOpen(false);
+  }, [location.pathname]);
 
   const handleProfileClick = () => {
-    setIsProfileDropDownOpen(!isProfileDropDownOpen);
+    setIsProfileDropDownOpen((prev) => !prev);
+  };
+
+  const handleMobileNavToggle = () => {
+    setIsMobileNavOpen((prev) => !prev);
   };
 
   const handleLogout = async () => {
     try {
-      await axios.post(
-        `${API_BASE}/logout`,
-        {},
-        { withCredentials: true }
-      );
+      await axios.post(`${API_BASE}/logout`, {}, { withCredentials: true });
     } catch (e) {
       console.error(e);
     }
@@ -68,146 +130,208 @@ const Menu = () => {
 
   const avatarText = username.slice(0, 2) || "ZU";
 
-  const menuCLass = "menu";
-  const activeMenuClass = "menu selected";
+  const isRouteActive = (itemPath) => {
+    if (itemPath === "/") {
+      return location.pathname === "/" || location.pathname === "/dashboard" || location.pathname === "/dashboard/";
+    }
+    return location.pathname === itemPath || location.pathname === `/dashboard${itemPath}`;
+  };
 
   return (
-    <div className="menu-container" style={{ position: "relative" }}>
-      <img src="logo.png" style={{ width: "50px" }} alt="Zerodha Logo" />
-      <div className="menus">
+    <div className="menu-container">
+      {/* Zerodha Kite Brand Logo */}
+      <Link to="/" className="logo-link" title="Zerodha Kite Trading Terminal">
+        <img src="logo.png" className="logo" alt="Zerodha Logo" />
+      </Link>
+
+      {/* Desktop Navigation Menu (Screens >= 992px) */}
+      <div className="menus desktop-menus">
         <ul>
-          <li>
-            <Link
-              style={{ textDecoration: "none" }}
-              to="/"
-              onClick={() => {
-                handleMenuClick(0);
-              }}
-            >
-              <p className={selectedMenu === 0 ? activeMenuClass : menuCLass}>
-                Dashboard
-              </p>
-            </Link>
-          </li>
-
-          <li>
-            <Link
-              style={{ textDecoration: "none" }}
-              to="/orders"
-              onClick={() => {
-                handleMenuClick(1);
-              }}
-            >
-              <p className={selectedMenu === 1 ? activeMenuClass : menuCLass}>
-                Orders
-              </p>
-            </Link>
-          </li>
-
-          <li>
-            <Link
-              style={{ textDecoration: "none" }}
-              to="/holdings"
-              onClick={() => {
-                handleMenuClick(2);
-              }}
-            >
-              <p className={selectedMenu === 2 ? activeMenuClass : menuCLass}>
-                Holdings
-              </p>
-            </Link>
-          </li>
-
-          <li>
-            <Link
-              style={{ textDecoration: "none" }}
-              to="/positions"
-              onClick={() => {
-                handleMenuClick(3);
-              }}
-            >
-              <p className={selectedMenu === 3 ? activeMenuClass : menuCLass}>
-                Positions
-              </p>
-            </Link>
-          </li>
-
-          <li>
-            <Link
-              style={{ textDecoration: "none" }}
-              to="/funds"
-              onClick={() => {
-                handleMenuClick(4);
-              }}
-            >
-              <p className={selectedMenu === 4 ? activeMenuClass : menuCLass}>
-                Funds
-              </p>
-            </Link>
-          </li>
-
-          <li>
-            <Link
-              style={{ textDecoration: "none" }}
-              to="/apps"
-              onClick={() => {
-                handleMenuClick(5);
-              }}
-            >
-              <p className={selectedMenu === 5 ? activeMenuClass : menuCLass}>
-                Apps
-              </p>
-            </Link>
-          </li>
+          {NAV_ITEMS.map((item) => {
+            const active = isRouteActive(item.path);
+            return (
+              <li key={item.path}>
+                <Link to={item.path} style={{ textDecoration: "none" }}>
+                  <p className={`menu ${active ? "selected" : ""}`}>
+                    {item.name}
+                  </p>
+                </Link>
+              </li>
+            );
+          })}
         </ul>
 
-        <hr />
+        <hr className="nav-vertical-divider" />
+
+        {/* User Profile Avatar & Dropdown */}
         <div
+          ref={profileRef}
           className="profile"
           onClick={handleProfileClick}
-          style={{ position: "relative", cursor: "pointer" }}
+          title="Account profile & settings"
         >
           <div className="avatar">{avatarText}</div>
           <p className="username">{username}</p>
 
           {isProfileDropDownOpen && (
             <div
-              style={{
-                position: "absolute",
-                top: "42px",
-                right: "0",
-                backgroundColor: "#fff",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                borderRadius: "4px",
-                padding: "10px 16px",
-                zIndex: 1000,
-                minWidth: "150px",
-                border: "1px solid #eee",
-              }}
+              className="profile-dropdown-card"
               onClick={(e) => e.stopPropagation()}
             >
-              <div style={{ marginBottom: "8px", fontWeight: "500", fontSize: "0.85rem" }}>
-                {username}
+              <div className="profile-dropdown-header">
+                <div className="dropdown-username">{username}</div>
+                <div className="dropdown-status">
+                  {isGuestUser ? "Guest Paper Trading" : "Active Client"}
+                </div>
               </div>
-              <button
-                onClick={handleLogout}
-                style={{
-                  background: "#ff5722",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "3px",
-                  padding: "6px 12px",
-                  fontSize: "0.8rem",
-                  cursor: "pointer",
-                  width: "100%",
-                }}
-              >
-                Logout
-              </button>
+              <hr className="dropdown-divider" />
+              {isGuestUser ? (
+                <a
+                  href={FRONTEND_URL ? `${FRONTEND_URL}/signup` : "/signup"}
+                  className="dropdown-auth-btn dropdown-login-btn"
+                >
+                  Log In / Sign Up
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="dropdown-auth-btn dropdown-logout-btn"
+                >
+                  Logout
+                </button>
+              )}
             </div>
           )}
         </div>
       </div>
+
+      {/* Mobile / Tablet Controls (Screens < 992px) */}
+      <div className="mobile-controls">
+        <div
+          className="profile mobile-profile"
+          onClick={handleProfileClick}
+          ref={profileRef}
+          title="User profile"
+        >
+          <div className="avatar">{avatarText}</div>
+          {isProfileDropDownOpen && (
+            <div
+              className="profile-dropdown-card mobile-profile-dropdown"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="profile-dropdown-header">
+                <div className="dropdown-username">{username}</div>
+                <div className="dropdown-status">
+                  {isGuestUser ? "Guest Paper Trading" : "Active Client"}
+                </div>
+              </div>
+              <hr className="dropdown-divider" />
+              {isGuestUser ? (
+                <a
+                  href={FRONTEND_URL ? `${FRONTEND_URL}/signup` : "/signup"}
+                  className="dropdown-auth-btn dropdown-login-btn"
+                >
+                  Log In / Sign Up
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="dropdown-auth-btn dropdown-logout-btn"
+                >
+                  Logout
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Hamburger Menu Toggle Button */}
+        <button
+          type="button"
+          className="mobile-nav-toggle"
+          onClick={handleMobileNavToggle}
+          aria-label={isMobileNavOpen ? "Close navigation menu" : "Open navigation menu"}
+          aria-expanded={isMobileNavOpen}
+        >
+          {isMobileNavOpen ? (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          ) : (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+          )}
+        </button>
+      </div>
+
+      {/* Mobile Navigation Drawer / Dropdown */}
+      {isMobileNavOpen && (
+        <div ref={mobileNavRef} className="mobile-nav-drawer" role="dialog" aria-modal="true">
+          <div className="mobile-nav-header">
+            <div className="mobile-user-info">
+              <div className="avatar mobile-drawer-avatar">{avatarText}</div>
+              <div>
+                <div className="mobile-user-name">{username}</div>
+                <div className="mobile-user-badge">
+                  {isGuestUser ? "Guest Paper Trading" : "Active Client"}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="mobile-drawer-close"
+              onClick={() => setIsMobileNavOpen(false)}
+              aria-label="Close menu"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="mobile-nav-list">
+            {NAV_ITEMS.map((item) => {
+              const active = isRouteActive(item.path);
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`mobile-nav-link ${active ? "active" : ""}`}
+                  onClick={() => setIsMobileNavOpen(false)}
+                >
+                  <span className="mobile-nav-icon">{item.icon}</span>
+                  <span className="mobile-nav-text">{item.name}</span>
+                  {active && <span className="mobile-nav-active-pill">●</span>}
+                </Link>
+              );
+            })}
+          </div>
+
+          <div className="mobile-nav-footer">
+            {isGuestUser ? (
+              <a
+                href={FRONTEND_URL ? `${FRONTEND_URL}/signup` : "/signup"}
+                className="mobile-auth-btn mobile-login-btn"
+                onClick={() => setIsMobileNavOpen(false)}
+              >
+                Log In / Sign Up
+              </a>
+            ) : (
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="mobile-auth-btn mobile-logout-btn"
+              >
+                Logout
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

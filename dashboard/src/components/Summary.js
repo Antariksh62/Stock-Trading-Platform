@@ -43,24 +43,26 @@ const Summary = () => {
 
   return (
     <>
-      <div className="username" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h6 style={{ margin: 0 }}>Hi, {username}!</h6>
+      <div className="username-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "8px" }}>
+        <h6 style={{ margin: 0, fontSize: "1.1rem", fontWeight: "500", color: "#333" }}>Hi, {username}!</h6>
         <button
+          type="button"
           onClick={openAIAnalystWindow}
           style={{
             background: "linear-gradient(135deg, #387ed1, #7c4dff)",
             color: "#fff",
             border: "none",
-            padding: "8px 16px",
+            padding: "7px 15px",
             borderRadius: "4px",
-            fontSize: "0.82rem",
+            fontSize: "0.8rem",
             fontWeight: "500",
             cursor: "pointer",
-            display: "flex",
+            display: "inline-flex",
             alignItems: "center",
             gap: "6px",
             boxShadow: "0 2px 6px rgba(56, 126, 209, 0.25)",
             transition: "all 0.15s ease",
+            whiteSpace: "nowrap",
           }}
         >
           <span>✦</span>

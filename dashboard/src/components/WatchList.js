@@ -222,7 +222,7 @@ const WatchList = () => {
           type="text"
           name="search"
           id="search"
-          placeholder={marketTab === "NIFTY" ? "Search Nifty 50 stocks (e.g. RELIANCE, TCS)..." : "Search Nasdaq 100 stocks (e.g. AAPL, NVDA)..."}
+          placeholder={marketTab === "NIFTY" ? "Search Nifty 50 stocks..." : "Search Nasdaq 100 stocks..."}
           className="search"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}

@@ -135,10 +135,11 @@ const TopBar = () => {
 
   return (
     <div className="topbar-container">
-      <div className="indices-container" style={{ flexBasis: "48%", justifyContent: "flex-start", gap: "16px", alignItems: "center" }}>
+      <div className="indices-container">
         
         {/* Dynamic Indian Exchange Status Badge (IST) */}
         <div
+          className="exchange-badge indian-badge"
           title={`NSE/BSE Trading Hours: ${exchangeStatuses.indian.hours} • Current: ${exchangeStatuses.indian.timeStr}`}
           style={{
             display: "flex",
@@ -152,6 +153,7 @@ const TopBar = () => {
             color: exchangeStatuses.indian.isOpen ? "#2e7d32" : "#e65100",
             border: exchangeStatuses.indian.isOpen ? "1px solid #c8e6c9" : "1px solid #ffe0b2",
             whiteSpace: "nowrap",
+            flexShrink: 0,
           }}
         >
           <span style={{ fontSize: "0.5rem" }}>{exchangeStatuses.indian.isOpen ? "●" : "■"}</span>
@@ -159,7 +161,7 @@ const TopBar = () => {
         </div>
 
         {/* NIFTY 50 */}
-        <div className="nifty" title={`National Stock Exchange • ${exchangeStatuses.indian.isOpen ? "Live Feed" : "Official Close"}`}>
+        <div className="nifty index-item" title={`National Stock Exchange • ${exchangeStatuses.indian.isOpen ? "Live Feed" : "Official Close"}`}>
           <p className="index">{indicesData.nifty.name}</p>
           <p
             className="index-points"
@@ -178,7 +180,7 @@ const TopBar = () => {
         </div>
 
         {/* SENSEX */}
-        <div className="sensex" title={`Bombay Stock Exchange • ${exchangeStatuses.indian.isOpen ? "Live Feed" : "Official Close"}`}>
+        <div className="sensex index-item" title={`Bombay Stock Exchange • ${exchangeStatuses.indian.isOpen ? "Live Feed" : "Official Close"}`}>
           <p className="index">{indicesData.sensex.name}</p>
           <p
             className="index-points"
@@ -197,7 +199,7 @@ const TopBar = () => {
         </div>
 
         {/* NASDAQ (QQQ) with Dynamic US Market Status Badge */}
-        <div className="sensex" title={`NASDAQ / US Tech Benchmark • Hours: ${exchangeStatuses.us.hours} • Current: ${exchangeStatuses.us.timeStr}`}>
+        <div className="sensex index-item nasdaq-index" title={`NASDAQ / US Tech Benchmark • Hours: ${exchangeStatuses.us.hours} • Current: ${exchangeStatuses.us.timeStr}`}>
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <p className="index" style={{ margin: 0 }}>{indicesData.nasdaq.name}</p>
             <span
@@ -231,6 +233,7 @@ const TopBar = () => {
 
         {/* Stream Health Indicator */}
         <div
+          className="stream-health"
           title={`Real-Time Ticker Stream: ${connectionStatus} (Source: ${sourceTag})`}
           style={{
             display: "flex",
@@ -238,6 +241,7 @@ const TopBar = () => {
             gap: "4px",
             fontSize: "0.62rem",
             color: connectionStatus === "connected" ? "#4caf50" : "#9e9e9e",
+            flexShrink: 0,
           }}
         >
           <span style={{ fontSize: "0.45rem" }}>●</span>

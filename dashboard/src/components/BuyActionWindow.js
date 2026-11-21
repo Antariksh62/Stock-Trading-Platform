@@ -168,7 +168,7 @@ const BuyActionWindow = ({ uid, mode = "BUY", customPrice = null, initialProduct
   };
 
   return (
-    <div className="container" id="buy-window" draggable="true" style={{ width: "420px", zIndex: 1300 }}>
+    <div className="container" id="buy-window" draggable="true" style={{ width: "420px", maxWidth: "94vw", zIndex: 1300 }}>
       {/* Header */}
       <div className={`header ${isSell ? "header-sell" : ""}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
