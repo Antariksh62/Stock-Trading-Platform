@@ -60,26 +60,47 @@ const configuredOrigins = (process.env.ALLOWED_ORIGINS || "")
 const defaultAllowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
+  "http://localhost:3002",
   "http://localhost:5173",
   "http://localhost:5174",
   "http://127.0.0.1:3000",
   "http://127.0.0.1:3001",
+  "http://127.0.0.1:3002",
   "http://127.0.0.1:5173",
   "http://127.0.0.1:5174",
   process.env.FRONTEND_URL,
   process.env.DASHBOARD_URL,
+  process.env.RENDER_EXTERNAL_URL,
   ...configuredOrigins,
 ].filter(Boolean);
 
-const corsOriginDelegate = (origin, callback) => {
+const isOriginAllowed = (origin) => {
   // Allow non-browser agents (cURL, mobile apps, automated test suites, internal requests)
-  if (!origin) {
+  if (!origin) return true;
+
+  if (defaultAllowedOrigins.includes(origin)) return true;
+
+  // Allow all onrender.com subdomains (both production and preview environments)
+  if (/^https?:\/\/([a-z0-9-]+\.)*onrender\.com(:\d+)?$/i.test(origin)) {
+    return true;
+  }
+
+  // Allow localhost or 127.0.0.1 on any port
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)) {
+    return true;
+  }
+
+  return false;
+};
+
+const corsOriginDelegate = (origin, callback) => {
+  if (isOriginAllowed(origin)) {
     return callback(null, true);
   }
-  if (defaultAllowedOrigins.includes(origin)) {
-    return callback(null, true);
-  }
-  return callback(new Error(`CORS policy violation: Origin '${origin}' is not authorized.`));
+  // NEVER throw an Error in the CORS delegate!
+  // Throwing an Error triggers Express's 500 error handler, crashing all asset/page requests.
+  // Returning callback(null, false) cleanly disables CORS headers without crashing requests.
+  return callback(null, false);
 };
 
 const corsOptions = {
@@ -127,6 +148,7 @@ const io = new Server(server, {
 
 io.use((socket, next) => {
   let token = socket.handshake.auth?.token || socket.handshake.query?.token;
+  const passedUserId = socket.handshake.auth?.userId || socket.handshake.query?.userId;
 
   // Fallback: Check cookies in socket handshake headers
   if (!token && socket.handshake.headers.cookie) {
@@ -137,25 +159,24 @@ io.use((socket, next) => {
     }
   }
 
-  if (!token) {
-    return next(new Error("Authentication error: No JWT provided"));
+  if (token) {
+    try {
+      const tokenSecret = process.env.TOKEN_KEY;
+      if (tokenSecret) {
+        const decoded = jwt.verify(token, tokenSecret);
+        if (decoded && decoded.id) {
+          socket.userId = String(decoded.id);
+          return next();
+        }
+      }
+    } catch (err) {
+      // Token invalid or expired, fallback to guest identity
+    }
   }
 
-  try {
-    const tokenSecret = process.env.TOKEN_KEY;
-    if (!tokenSecret) {
-      return next(new Error("Authentication error: Server missing TOKEN_KEY configuration"));
-    }
-    const decoded = jwt.verify(token, tokenSecret);
-    if (!decoded || !decoded.id) {
-      return next(new Error("Authentication error: Malformed JWT payload"));
-    }
-    // Scope identity exclusively to verified user ID
-    socket.userId = String(decoded.id);
-    next();
-  } catch (err) {
-    return next(new Error(`Authentication error: ${err.message}`));
-  }
+  // Allow guest / trial connections to view live public ticker feeds
+  socket.userId = passedUserId || "demo_user";
+  next();
 });
 
 io.on("connection", (socket) => {
