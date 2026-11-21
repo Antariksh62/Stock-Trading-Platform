@@ -17,11 +17,11 @@ export const SOCKET_URL =
     : "/";
 
 export const FRONTEND_URL =
-  process.env.REACT_APP_FRONTEND_URL !== undefined
+  typeof window !== "undefined" && window.location.port !== "3000"
+    ? ""
+    : process.env.REACT_APP_FRONTEND_URL !== undefined
     ? process.env.REACT_APP_FRONTEND_URL
-    : typeof window !== "undefined" && window.location.port === "3000"
-    ? "http://localhost:5173"
-    : "";
+    : "http://localhost:5173";
 
 // Razorpay Public Test Key ID for Frontend Checkout
 export const RAZORPAY_KEY_ID =

@@ -163,9 +163,12 @@ const Menu = () => {
       setIsGuestUser(true);
       setIsLoggingOut(false);
 
-      // 5. Authoritative redirect to login screen
-      const loginUrl = FRONTEND_URL ? `${FRONTEND_URL}/login` : "/login";
-      window.location.href = loginUrl;
+      // 5. Authoritative redirect to home page
+      const homeUrl =
+        typeof window !== "undefined" && window.location.port === "3000" && FRONTEND_URL
+          ? `${FRONTEND_URL}/`
+          : "/";
+      window.location.href = homeUrl;
     }
   };
 
