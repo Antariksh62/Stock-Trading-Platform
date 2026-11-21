@@ -1413,10 +1413,144 @@ const Funds = () => {
                   ))}
                 </div>
 
-                {/* Razorpay Test Mode Card & Instructions (Displayed before checkout) */}
-                {modalMode === "add" && addMethod === "razorpay" && (
-                  <RazorpayTestCardNotice />
-                )}
+                {/* Action Buttons (Immediately Below Amount Input & Pills) */}
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginBottom: "16px" }}>
+                  <button
+                    type="button"
+                    onClick={resetModalState}
+                    disabled={loading && paymentState === "verifying"}
+                    style={{
+                      padding: "9px 18px",
+                      background: "#f5f5f5",
+                      border: "1px solid #ddd",
+                      borderRadius: "3px",
+                      cursor: "pointer",
+                      fontSize: "0.85rem",
+                      color: "#444",
+                    }}
+                  >
+                    Cancel
+                  </button>
+
+                  {activeOrderId && (paymentState === "pending" || paymentState === "failed") && (
+                    <button
+                      type="button"
+                      onClick={handleCheckActivePaymentStatus}
+                      disabled={loading}
+                      style={{
+                        padding: "9px 14px",
+                        background: "#fff",
+                        border: "1px solid #387ed1",
+                        color: "#387ed1",
+                        borderRadius: "3px",
+                        cursor: loading ? "not-allowed" : "pointer",
+                        fontWeight: "500",
+                        fontSize: "0.82rem",
+                      }}
+                    >
+                      Check Status
+                    </button>
+                  )}
+
+                  {paymentState === "pending" ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        refreshData();
+                        loadTransactions(page, limit, filterType);
+                        resetModalState();
+                      }}
+                      style={{
+                        padding: "9px 18px",
+                        background: "#387ed1",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "3px",
+                        cursor: "pointer",
+                        fontWeight: "500",
+                        fontSize: "0.85rem",
+                      }}
+                    >
+                      Refresh Balance
+                    </button>
+                  ) : paymentState === "failed" ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentState("idle");
+                        setMessage("");
+                        setActiveOrderId(null);
+                      }}
+                      style={{
+                        padding: "9px 18px",
+                        background: "#387ed1",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "3px",
+                        cursor: "pointer",
+                        fontWeight: "500",
+                        fontSize: "0.85rem",
+                      }}
+                    >
+                      Try Again
+                    </button>
+                  ) : (
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      style={{
+                        padding: "9px 22px",
+                        background:
+                          modalMode === "withdraw"
+                            ? "#4184f3"
+                            : addMethod === "razorpay"
+                            ? "#387ed1"
+                            : "#4caf50",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "3px",
+                        cursor: loading ? "not-allowed" : "pointer",
+                        fontWeight: "600",
+                        fontSize: "0.88rem",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        boxShadow: "0 2px 6px rgba(56, 126, 209, 0.25)",
+                      }}
+                    >
+                      {loading ? (
+                        <>
+                          <span
+                            style={{
+                              display: "inline-block",
+                              width: "12px",
+                              height: "12px",
+                              border: "2px solid #ffffff88",
+                              borderTopColor: "#fff",
+                              borderRadius: "50%",
+                              animation: "spin 1s infinite linear",
+                            }}
+                          />
+                          <span>
+                            {paymentState === "verifying"
+                              ? "Verifying Payment..."
+                              : paymentState === "creating_order"
+                              ? "Creating Order..."
+                              : "Processing..."}
+                          </span>
+                        </>
+                      ) : modalMode === "withdraw" ? (
+                        "Confirm Withdrawal"
+                      ) : addMethod === "razorpay" ? (
+                        amountInput && Number(amountInput) > 0
+                          ? `Pay with Razorpay (₹${Number(amountInput).toLocaleString()})`
+                          : "Pay with Razorpay"
+                      ) : (
+                        "Confirm & Pay via UPI"
+                      )}
+                    </button>
+                  )}
+                </div>
 
                 {/* Notification / Status Message Box */}
                 {message && (
@@ -1457,143 +1591,10 @@ const Funds = () => {
                   </div>
                 )}
 
-                {/* Action Buttons */}
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-                  <button
-                    type="button"
-                    onClick={resetModalState}
-                    disabled={loading && paymentState === "verifying"}
-                    style={{
-                      padding: "8px 16px",
-                      background: "#f5f5f5",
-                      border: "1px solid #ddd",
-                      borderRadius: "3px",
-                      cursor: "pointer",
-                      fontSize: "0.85rem",
-                      color: "#444",
-                    }}
-                  >
-                    Cancel
-                  </button>
-
-                  {activeOrderId && (paymentState === "pending" || paymentState === "failed") && (
-                    <button
-                      type="button"
-                      onClick={handleCheckActivePaymentStatus}
-                      disabled={loading}
-                      style={{
-                        padding: "8px 14px",
-                        background: "#fff",
-                        border: "1px solid #387ed1",
-                        color: "#387ed1",
-                        borderRadius: "3px",
-                        cursor: loading ? "not-allowed" : "pointer",
-                        fontWeight: "500",
-                        fontSize: "0.82rem",
-                      }}
-                    >
-                      Check Status
-                    </button>
-                  )}
-
-                  {paymentState === "pending" ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        refreshData();
-                        loadTransactions(page, limit, filterType);
-                        resetModalState();
-                      }}
-                      style={{
-                        padding: "8px 18px",
-                        background: "#387ed1",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "3px",
-                        cursor: "pointer",
-                        fontWeight: "500",
-                        fontSize: "0.85rem",
-                      }}
-                    >
-                      Refresh Balance
-                    </button>
-                  ) : paymentState === "failed" ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPaymentState("idle");
-                        setMessage("");
-                        setActiveOrderId(null);
-                      }}
-                      style={{
-                        padding: "8px 18px",
-                        background: "#387ed1",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "3px",
-                        cursor: "pointer",
-                        fontWeight: "500",
-                        fontSize: "0.85rem",
-                      }}
-                    >
-                      Try Again
-                    </button>
-                  ) : (
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      style={{
-                        padding: "8px 20px",
-                        background:
-                          modalMode === "withdraw"
-                            ? "#4184f3"
-                            : addMethod === "razorpay"
-                            ? "#387ed1"
-                            : "#4caf50",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "3px",
-                        cursor: loading ? "not-allowed" : "pointer",
-                        fontWeight: "500",
-                        fontSize: "0.85rem",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                    >
-                      {loading ? (
-                        <>
-                          <span
-                            style={{
-                              display: "inline-block",
-                              width: "12px",
-                              height: "12px",
-                              border: "2px solid #ffffff88",
-                              borderTopColor: "#fff",
-                              borderRadius: "50%",
-                              animation: "spin 1s infinite linear",
-                            }}
-                          />
-                          <span>
-                            {paymentState === "verifying"
-                              ? "Verifying Payment..."
-                              : paymentState === "creating_order"
-                              ? "Creating Order..."
-                              : "Processing..."}
-                          </span>
-                        </>
-                      ) : modalMode === "withdraw" ? (
-                        "Confirm Withdrawal"
-                      ) : addMethod === "razorpay" ? (
-                        amountInput && Number(amountInput) > 0
-                          ? `Pay with Razorpay (₹${Number(amountInput).toLocaleString()})`
-                          : "Pay with Razorpay"
-                      ) : (
-                        "Confirm & Pay via UPI"
-                      )}
-                    </button>
-                  )}
-                </div>
+                {/* Razorpay Test Mode Card & Instructions (Displayed below Pay button) */}
+                {modalMode === "add" && addMethod === "razorpay" && (
+                  <RazorpayTestCardNotice />
+                )}
               </form>
             )}
           </div>
