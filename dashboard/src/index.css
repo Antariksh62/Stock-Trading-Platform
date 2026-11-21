@@ -1108,6 +1108,15 @@ html, body {
   .stream-health {
     display: none !important;
   }
+  .menus ul {
+    gap: 12px !important;
+  }
+  .menu {
+    font-size: 0.8rem !important;
+  }
+  .menu-container {
+    gap: 14px !important;
+  }
 }
 
 /* 2. Small Laptops & Tablets (< 991px) */
@@ -1130,12 +1139,12 @@ html, body {
     display: none !important;
   }
   .content {
-    padding: 20px 24px;
+    padding: 18px 20px;
   }
 }
 
-/* 3. Tablets (< 768px): Stacking layout & mobile tabs */
-@media (max-width: 767px) {
+/* 3. Tablets (< 769px): Stacking layout, mobile tabs, card & data stacking */
+@media (max-width: 768px) {
   .topbar-container {
     padding: 0 12px;
     gap: 8px;
@@ -1170,7 +1179,7 @@ html, body {
 
   .mobile-tab-btn {
     flex: 1;
-    padding: 10px 14px;
+    padding: 10px 8px;
     border: none;
     background: transparent;
     font-size: 0.85rem;
@@ -1180,6 +1189,9 @@ html, body {
     text-align: center;
     border-bottom: 2px solid transparent;
     transition: all 0.15s ease;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .mobile-tab-btn.active {
@@ -1218,6 +1230,30 @@ html, body {
   .content.mobile-active {
     display: block !important;
   }
+
+  /* Responsive layout for Summary & Funds cards/rows */
+  .data {
+    width: 100% !important;
+    max-width: 100% !important;
+    justify-content: space-between !important;
+    gap: 16px !important;
+  }
+
+  .data .first h3 {
+    font-size: clamp(1.6rem, 6vw, 2.2rem) !important;
+  }
+
+  .row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 16px !important;
+    margin-top: 16px !important;
+  }
+
+  .col {
+    flex-basis: 100% !important;
+    width: 100% !important;
+  }
 }
 
 /* 4. Small Mobile Phones (< 576px) */
@@ -1242,39 +1278,55 @@ html, body {
     padding-left: 6px;
   }
   .trial-banner {
-    padding: 6px 10px !important;
+    padding: 8px 12px !important;
     gap: 8px !important;
   }
   .trial-banner-desktop-text {
     display: none;
+  }
+  .trial-banner-message {
+    flex: 1 1 100% !important;
+    font-size: 0.78rem !important;
+  }
+  .trial-banner-actions {
+    width: 100% !important;
+    justify-content: flex-end !important;
+  }
+  .trial-btn {
+    padding: 4px 10px !important;
+    font-size: 0.74rem !important;
   }
 }
 
 /* 5. Extra Small Mobile (< 360px: e.g., 320px screens) */
 @media (max-width: 360px) {
   .topbar-container {
-    padding: 0 6px;
-    gap: 4px;
+    padding: 0 6px !important;
+    gap: 4px !important;
   }
   .indices-container {
-    gap: 6px;
+    gap: 4px !important;
+  }
+  .exchange-badge {
+    padding: 2px 4px !important;
+    font-size: 0.58rem !important;
   }
   .nifty .percent {
     display: none !important;
   }
   .nifty .index {
-    font-size: 0.72rem;
+    font-size: 0.7rem !important;
   }
   .nifty .index-points {
-    font-size: 0.72rem;
+    font-size: 0.7rem !important;
   }
   .logo {
-    height: 18px;
+    height: 16px !important;
   }
   .trial-btn {
-    padding: 3px 8px !important;
-    font-size: 0.7rem !important;
-    min-height: 26px !important;
+    padding: 3px 6px !important;
+    font-size: 0.68rem !important;
+    min-height: 24px !important;
   }
 }
 

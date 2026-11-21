@@ -347,10 +347,12 @@ const WatchListItem = ({ stock }) => {
     <li
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onClick={() => setShowWatchListActions((prev) => !prev)}
       style={{
         position: "relative",
         background: showWatchListActions ? "#fbfbfb" : "transparent",
         transition: "background 0.15s ease",
+        cursor: "pointer",
       }}
     >
       <div className="item" style={{ minHeight: "38px" }}>

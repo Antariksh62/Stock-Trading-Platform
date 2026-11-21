@@ -32,7 +32,7 @@ const Dashboard = () => {
       case "/apps":
         return "Apps";
       default:
-        return "Console";
+        return "Dashboard";
     }
   };
 
